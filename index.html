@@ -123,6 +123,17 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .tbl td{padding:5px 6px;border-bottom:1px solid var(--line)}
 .tbl td:last-child{text-align:right;font-family:var(--font-mono)}
 .csvbox{height:160px;font-family:var(--font-mono);font-size:13px}
+.combo{position:relative;display:block;min-width:0}
+.combo>input{width:100%;padding-right:48px}
+.cbtn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:42px;height:42px;border:0;background:transparent;color:var(--accent);font-size:18px;cursor:pointer;border-radius:8px}
+.cbtn:hover{background:var(--accent-soft)}
+.cpop{position:absolute;left:0;right:0;top:100%;margin-top:4px;max-height:min(42vh,300px);overflow:auto;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:8px;z-index:60;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.combo.up .cpop{top:auto;bottom:100%;margin:0 0 4px}
+.copt{display:block;width:100%;text-align:left;font:inherit;color:inherit;background:transparent;border:0;border-bottom:1px solid var(--line);padding:12px 14px;cursor:pointer}
+.copt:last-child{border-bottom:0}
+.copt:hover,.copt:focus{background:var(--accent-soft);outline:none}
+.cnone{padding:12px 14px;color:var(--muted);font-size:14px}
+.selbar .combo{flex:1;min-width:120px}
 .row.picked{border-color:var(--accent);background:var(--accent-soft)}
 .row .ck{width:26px;height:26px;border:2px solid var(--line);border-radius:6px;display:grid;place-items:center;font-weight:700;color:var(--on-accent);background:var(--surface)}
 .row.picked .ck{background:var(--accent);border-color:var(--accent)}
@@ -1355,6 +1366,55 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     window.scrollTo(0, 0);
     updateBar();
   }
+
+  /* ---------- menu a tendina per collana, editore e box ---------- */
+  function comboValues(kind) {
+    var all = listAll(), set = new Map();
+    if (kind === 'col') return collaneList();
+    all.forEach(function (a) { var v = kind === 'ed' ? a.editore : a.box; if (v && !set.has(v.toLowerCase())) set.set(v.toLowerCase(), v); });
+    return Array.from(set.values()).sort(function (x, y) { return x.localeCompare(y, 'it', { numeric: true }); });
+  }
+  var openCombo = null;
+  function closeCombo() { if (openCombo) { openCombo.pop.remove(); openCombo.btn.setAttribute('aria-expanded', 'false'); openCombo = null; } }
+  function showCombo(c, filter) {
+    closeCombo();
+    var vals = comboValues(c.kind), f = norm(filter).toLowerCase();
+    if (f) vals = vals.filter(function (v) { return v.toLowerCase().indexOf(f) >= 0; });
+    if (f && vals.length === 1 && vals[0].toLowerCase() === f) return;
+    var pop = h('div', { class: 'cpop', role: 'listbox' });
+    if (!vals.length) pop.append(h('div', { class: 'cnone', text: f ? 'Nessuna corrispondenza: scrivila per aggiungerla.' : 'Ancora niente da scegliere.' }));
+    vals.forEach(function (v) {
+      var o = h('button', { type: 'button', class: 'copt', role: 'option', text: c.kind === 'box' ? boxLabel(v) : v });
+      o.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      o.addEventListener('click', function () {
+        c.input.value = v;
+        c.input.dispatchEvent(new Event('input', { bubbles: true }));
+        c.input.dispatchEvent(new Event('change', { bubbles: true }));
+        closeCombo();
+      });
+      pop.append(o);
+    });
+    c.wrap.append(pop);
+    c.btn.setAttribute('aria-expanded', 'true');
+    openCombo = { pop: pop, btn: c.btn };
+  }
+  [['#f-collana', 'col'], ['#f-ed', 'ed'], ['#f-box', 'box'], ['#s-collana', 'col'], ['#s-ed', 'ed'], ['#s-box', 'box'], ['#sel-box', 'box', 'up']].forEach(function (d) {
+    var input = $(d[0]);
+    if (!input) return;
+    input.removeAttribute('list');
+    var wrap = h('div', { class: 'combo' + (d[2] ? ' ' + d[2] : '') });
+    input.parentNode.insertBefore(wrap, input);
+    wrap.append(input);
+    var btn = h('button', { type: 'button', class: 'cbtn', 'aria-label': 'Scegli tra quelli già inseriti', 'aria-expanded': 'false', text: '▾' });
+    wrap.append(btn);
+    var c = { kind: d[1], input: input, wrap: wrap, btn: btn };
+    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    btn.addEventListener('click', function () { if (openCombo && openCombo.btn === btn) closeCombo(); else showCombo(c, ''); });
+    input.addEventListener('input', function () { if (norm(input.value)) showCombo(c, input.value); else closeCombo(); });
+    input.addEventListener('blur', function () { setTimeout(function () { if (openCombo && openCombo.btn === btn) closeCombo(); }, 150); });
+    input.addEventListener('keydown', function (e) { if (e.key === 'Escape' && openCombo) { e.stopPropagation(); closeCombo(); } });
+  });
+  document.addEventListener('click', function (e) { if (openCombo && !e.target.closest('.combo')) closeCombo(); });
 
   /* ---------- eventi ---------- */
   document.querySelectorAll('.tabs button').forEach(function (b) { b.addEventListener('click', function () { showView(b.dataset.v); }); });
