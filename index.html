@@ -89,7 +89,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .group{display:grid;gap:8px}
 .group>.list{margin-left:30px;padding-left:12px;border-left:3px solid var(--accent-soft)}
 .gh{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;cursor:pointer;color:var(--ink)}
-.gh .t{font-family:var(--font-display);text-transform:uppercase;font-weight:700;font-size:20px;letter-spacing:.03em;overflow-wrap:anywhere}
+.gh .t{font-family:var(--font-display);text-transform:uppercase;font-weight:700;font-size:25px;letter-spacing:.03em;overflow-wrap:anywhere}
 .gh .c{font-family:var(--font-mono);font-size:13px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
 .meter{height:8px;border-radius:99px;background:var(--ph);overflow:hidden}
 .meter>span{display:block;height:100%;background:var(--accent);width:0}
@@ -141,6 +141,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .gh .tl{display:flex;align-items:center;gap:12px;min-width:0}
 .gcov{flex:none;width:44px;height:44px;border-radius:50%;background:var(--ph);overflow:hidden;border:1px solid var(--line)}
 .gcov img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+:root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}}
+:root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
+#btn-import,#btn-covs,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
+#btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
 .ghrow{display:flex;gap:8px;align-items:stretch}
 .ghrow .gh{flex:1;width:auto;min-width:0}
 .gck{flex:none;width:44px;border:2px solid var(--line);border-radius:8px;background:var(--surface);color:var(--on-accent);font:700 20px var(--font-mono);cursor:pointer}
