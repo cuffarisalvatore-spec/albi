@@ -185,6 +185,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
               <label class="btn small fbtn">Scegli<input type="file" accept="image/*" data-kind="found" data-target="draft" aria-label="Scegli un'immagine"></label>
               <button type="button" class="btn text" id="d-del" hidden>Togli</button>
             </div>
+            <div class="draftrow">
+              <button type="button" class="btn small" data-act="google" data-from="draft">Cerca su Google</button>
+              <button type="button" class="btn small" data-act="paste">Incolla</button>
+            </div>
           </div>
         </div>
         <p class="msg" id="msg" role="alert" hidden></p>
@@ -244,12 +248,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       </div>
       <div class="actions">
         <a class="btn primary" id="q-cb" target="_blank" rel="noopener noreferrer"><span class="step">1</span>Apri la scheda su ComicsBox</a>
-        <a class="btn" id="q-google" target="_blank" rel="noopener noreferrer">Oppure cerca su Google Immagini</a>
+        <button type="button" class="btn" id="q-google" data-act="google" data-from="queue">Oppure cerca su Google Immagini</button>
+        <button type="button" class="btn" data-act="paste">Incolla l'immagine copiata</button>
         <label class="btn fbtn"><span class="step">2</span>Scegli l'immagine salvata<input type="file" accept="image/*" data-kind="found" data-target="queue" aria-label="Scegli l'immagine salvata"></label>
         <label class="btn fbtn">Scatta foto dell'albo<input type="file" accept="image/*" capture="environment" data-kind="photo" data-target="queue" aria-label="Scatta foto dell'albo"></label>
         <button type="button" class="btn text" id="q-none">Nessuna copertina per questo albo</button>
       </div>
-      <p class="hint">Sulla pagina tieni premuta la copertina e salvala sul dispositivo, poi torna qui e scegline il file.</p>
+      <p class="hint">Sul computer: tasto destro sull'immagine → «Copia immagine», poi torna qui e premi Cmd+V (o «Incolla»). Puoi anche trascinarla qui. Sul telefono, con l'app installata: tieni premuta l'immagine → Condividi → Albi in Box.</p>
     </div>
   </section>
 </div>
@@ -301,6 +306,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="draftrow">
       <label class="btn small fbtn">Scatta foto<input type="file" accept="image/*" capture="environment" data-kind="photo" data-target="sheet" aria-label="Scatta foto"></label>
       <label class="btn small fbtn">Scegli<input type="file" accept="image/*" data-kind="found" data-target="sheet" aria-label="Scegli un'immagine"></label>
+      <button type="button" class="btn small" data-act="google" data-from="sheet">Cerca su Google</button>
+      <button type="button" class="btn small" data-act="paste">Incolla</button>
       <button type="button" class="btn text" id="s-nocov" hidden>Togli copertina</button>
     </div>
     <p class="msg" id="s-msg" role="alert" hidden></p>
@@ -954,7 +961,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return listAll().filter(function (a) { return a.coverState === 'missing' && (!ser || a.collana === ser) && (!only || a.box); })
       .sort(function (x, y) { return (x.box ? 0 : 1) - (y.box ? 0 : 1) || cmp(x, y); });
   }
-  function searchHref() { return 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent($('#q-query').value); }
   function renderQueue() {
     var s = $('#q-ser'), cur = s.value;
     var names = collaneList();
@@ -978,7 +984,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     $('#q-title').textContent = a.collana + ' ' + numLabel(a.numero);
     $('#q-sub').textContent = a.editore + (a.anno ? ' · ' + a.anno : '') + (a.titolo ? ' · ' + a.titolo : '') + (a.box ? ' · ' + boxLabel(a.box) : '');
     if (qFor !== a.id) { qFor = a.id; $('#q-query').value = [a.collana, a.editore, a.numero, 'copertina'].join(' '); }
-    $('#q-google').href = searchHref();
     var cb = $('#q-cb');
     cb.hidden = !a.url;
     if (a.url) cb.href = a.url;
@@ -1033,17 +1038,104 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     dropUrl(a.id);
     touch(a);
   }
+  async function attachImage(target, file, state) {
+    var blob = await shrink(file);
+    if (target === 'draft') { draft.cover = blob; draft.state = state; renderDraft(); toast('Copertina pronta: premi «Aggiungi e metti nel box»'); return true; }
+    var a = store.get(target);
+    if (!a) return false;
+    setCover(a, blob, state);
+    if (editId === a.id) renderSheetCover();
+    toast(state === 'photo' ? 'Foto salvata come copertina' : 'Copertina salvata · ' + a.collana + ' ' + numLabel(a.numero));
+    return true;
+  }
   async function handlePick(state, input) {
     var f = input.files && input.files[0];
     input.value = '';
     if (!f) return;
-    var blob = await shrink(f);
-    if (pickTarget === 'draft') { draft.cover = blob; draft.state = state; renderDraft(); return; }
-    var a = store.get(pickTarget);
-    if (!a) return;
-    setCover(a, blob, state);
-    if (editId === a.id) renderSheetCover();
-    toast(state === 'photo' ? 'Foto salvata come copertina' : 'Copertina salvata');
+    await attachImage(pickTarget, f, state);
+  }
+  /* a quale albo va l'immagine incollata, trascinata o condivisa */
+  function autoTarget() {
+    if (!$('#sheet-bg').hidden && editId) return editId;
+    if (!$('#v-cov').hidden) { var q = currentQueued(); if (q && !$('#q-card').hidden) return q.id; }
+    if (!$('#v-add').hidden && !$('#newp').hidden) return 'draft';
+    return null;
+  }
+  async function takeImage(file) {
+    if (!file || !/^image\//.test(file.type || '')) { toast('Non è un\u2019immagine.'); return; }
+    var t = autoTarget();
+    if (!t) { toast('Apri prima la scheda di un albo, o la coda copertine.'); return; }
+    await attachImage(t, file, 'found');
+  }
+  function imageFromItems(list) {
+    for (var i = 0; i < list.length; i++) { var it = list[i]; if (it.kind === 'file' && /^image\//.test(it.type)) return it.getAsFile(); }
+    return null;
+  }
+  document.addEventListener('paste', function (e) {
+    var cd = e.clipboardData, f = null;
+    if (cd) { f = imageFromItems(cd.items || []); if (!f && cd.files && cd.files[0] && /^image\//.test(cd.files[0].type)) f = cd.files[0]; }
+    if (f) { e.preventDefault(); takeImage(f); }
+  });
+  async function pasteButton() {
+    try {
+      var items = await navigator.clipboard.read();
+      for (var i = 0; i < items.length; i++) {
+        var ty = items[i].types.filter(function (t) { return /^image\//.test(t); })[0];
+        if (ty) { var b = await items[i].getType(ty); await takeImage(new File([b], 'incollata.' + extOf(ty), { type: ty })); return; }
+      }
+      toast('Negli appunti non c\u2019è nessuna immagine: usa «Copia immagine» sul risultato di Google.');
+    } catch (e) { toast('Il browser non mi lascia leggere gli appunti: premi Cmd+V (o tieni premuto → Incolla).'); }
+  }
+  ['dragover', 'drop'].forEach(function (n) {
+    document.addEventListener(n, function (e) {
+      var dt = e.dataTransfer;
+      if (!dt || !Array.prototype.some.call(dt.types || [], function (t) { return t === 'Files' || t === 'text/uri-list'; })) return;
+      e.preventDefault();
+      if (n !== 'drop') return;
+      var f = dt.files && dt.files[0];
+      if (f) { takeImage(f); return; }
+      var u = (dt.getData('text/uri-list') || '').split('\n')[0].trim();
+      if (!/^https?:\/\//.test(u)) return;
+      fetch(u).then(function (r) { return r.blob(); }).then(function (b) { return takeImage(new File([b], 'trascinata.jpg', { type: b.type || 'image/jpeg' })); })
+        .catch(function () { toast('Questo sito non permette il trascinamento: usa «Copia immagine» e poi incolla qui.'); });
+    });
+  });
+  function googleQuery(from) {
+    if (from === 'queue') return $('#q-query').value;
+    var c, e, n;
+    if (from === 'draft') { c = $('#f-collana').value; e = $('#f-ed').value; n = $('#f-num').value; }
+    else { c = $('#s-collana').value; e = $('#s-ed').value; n = $('#s-num').value; }
+    return [norm(c), norm(e), norm(n), 'copertina'].filter(Boolean).join(' ');
+  }
+  function openGoogle(from) {
+    var url = 'https://www.google.com/search?tbm=isch&q=' + encodeURIComponent(googleQuery(from));
+    var w = Math.min(560, screen.availWidth || 560), hh = Math.min(840, screen.availHeight || 840);
+    var win = null;
+    try { win = window.open(url, 'albi-cover-search', 'popup=yes,noopener=no,width=' + w + ',height=' + hh + ',left=' + Math.max(0, (screen.availWidth || 1200) - w - 20) + ',top=40'); } catch (e) { win = null; }
+    if (!win) window.open(url, '_blank');
+    else try { win.focus(); } catch (e) {}
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-act]') : null;
+    if (!b) return;
+    if (b.dataset.act === 'google') openGoogle(b.dataset.from);
+    else if (b.dataset.act === 'paste') pasteButton();
+  });
+  /* immagine condivisa da un'altra app (menu Condividi del telefono) */
+  async function handleShared() {
+    var q = location.search || '';
+    if (!/[?&]shared=/.test(q)) return;
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    try {
+      var cache = await caches.open('albi-share'), hit = await cache.match('shared-image');
+      if (!hit) { toast('Non ho ricevuto nessuna immagine.'); return; }
+      var blob = await hit.blob();
+      await cache.delete('shared-image');
+      showView('v-cov');
+      var cur = currentQueued();
+      if (!cur) { toast('Nessun albo in coda: apri la scheda di un albo e usa «Incolla».'); return; }
+      await attachImage(cur.id, new File([blob], 'condivisa.' + extOf(blob.type), { type: blob.type || 'image/jpeg' }), 'found');
+    } catch (e) { toast('Non sono riuscito a leggere l\u2019immagine condivisa.'); }
   }
   function removeCover(a) {
     if (a.coverId) a.trash = (a.trash || []).concat([a.coverId]);
@@ -1316,7 +1408,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#imp-bg').addEventListener('click', function (e) { if (e.target === $('#imp-bg')) closeImport(); });
   $('#q-ser').addEventListener('change', function () { queueIdx = 0; renderQueue(); });
   $('#q-only').addEventListener('change', function () { queueIdx = 0; renderQueue(); });
-  $('#q-query').addEventListener('input', function () { $('#q-google').href = searchHref(); });
   $('#q-skip').addEventListener('click', function () { queueIdx += 1; if (queueIdx >= pending().length) queueIdx = 0; renderQueue(); });
   $('#q-none').addEventListener('click', function () { var a = currentQueued(); if (!a) return; a.coverState = 'none'; touch(a); });
   $('#s-close').addEventListener('click', closeSheet);
@@ -1404,6 +1495,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     }
     renderAll();
     connect();
+    handleShared();
   })();
 })();
 </script>

@@ -1,6 +1,6 @@
 /* Service worker di Albi in Box: apre l'app anche senza rete.
    Cambia VERSION quando pubblichi una nuova versione dei file. */
-var VERSION = 'v1';
+var VERSION = 'v2';
 var SHELL = 'albi-shell-' + VERSION;
 var RUNTIME = 'albi-runtime-v1';
 var FILES = ['./', 'index.html', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest',
@@ -29,8 +29,23 @@ function swr(req, cacheName) {
 
 self.addEventListener('fetch', function (e) {
   var req = e.request;
-  if (req.method !== 'GET') return;
   var url = new URL(req.url);
+  // immagine condivisa dal menu «Condividi» del telefono: la teniamo da parte e riapriamo l'app
+  if (req.method === 'POST' && url.origin === self.location.origin && /share-target$/.test(url.pathname)) {
+    e.respondWith((async function () {
+      try {
+        var fd = await req.formData();
+        var f = fd.get('image');
+        if (f && f.size) {
+          var cache = await caches.open('albi-share');
+          await cache.put('shared-image', new Response(f, { headers: { 'Content-Type': f.type || 'image/jpeg' } }));
+        }
+      } catch (err) { /* l'app mostrerà che non è arrivato nulla */ }
+      return Response.redirect(new URL('./?shared=1', self.registration.scope).href, 303);
+    })());
+    return;
+  }
+  if (req.method !== 'GET') return;
   if (url.origin === self.location.origin) {
     e.respondWith(req.mode === 'navigate'
       ? caches.open(SHELL).then(function (c) { return c.match('index.html'); }).then(function (hit) {
