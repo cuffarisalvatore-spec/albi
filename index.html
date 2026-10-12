@@ -180,7 +180,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   </header>
   <div id="banner" class="banner" role="status" hidden></div>
 
-  <section id="v-add" class="view" aria-label="Metti un albo in un box">
+  <section id="v-add" class="view" aria-label="Metti un albo in un box" hidden>
     <div class="boxtag">
       <label for="f-box">Box in cui lo metto</label>
       <input id="f-box" autocomplete="off" placeholder="es. 12" list="dl-box">
@@ -233,7 +233,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="list" id="recent"></div>
   </section>
 
-  <section id="v-list" class="view" aria-label="Collezione" hidden>
+  <section id="v-list" class="view" aria-label="Collezione">
     <div class="stack" style="gap:8px">
       <div class="labrow"><span class="lab" id="prog-t"></span><span class="vbtns"><button type="button" class="btn text" id="btn-view">Griglia</button><button type="button" class="btn text" id="btn-sel">Seleziona</button></span></div>
       <div class="meter" aria-hidden="true"><span id="prog-b"></span></div>
@@ -294,8 +294,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 </div>
 
 <nav class="tabs" role="tablist" aria-label="Sezioni">
-  <button type="button" role="tab" id="t-add" aria-selected="true" data-v="v-add">Inserisci</button>
-  <button type="button" role="tab" id="t-list" aria-selected="false" data-v="v-list">Collezione<span class="n" id="n-list"></span></button>
+  <button type="button" role="tab" id="t-list" aria-selected="true" data-v="v-list">Collezione<span class="n" id="n-list"></span></button>
+  <button type="button" role="tab" id="t-add" aria-selected="false" data-v="v-add">Inserisci</button>
   <button type="button" role="tab" id="t-cov" aria-selected="false" data-v="v-cov">Copertine<span class="n" id="n-cov"></span></button>
 </nav>
 
@@ -886,8 +886,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- liste ---------- */
   var selMode = false, picked = new Set(), lastVisible = [];
-  var viewGrid = false, openSer = null;
-  try { viewGrid = localStorage.getItem('aib-view') === 'grid'; } catch (e) {}
+  var viewGrid = true, openSer = null;
+  try { viewGrid = localStorage.getItem('aib-view') !== 'list'; } catch (e) {}
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
