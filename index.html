@@ -139,6 +139,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .row .ck{width:26px;height:26px;border:2px solid var(--line);border-radius:6px;display:grid;place-items:center;font-weight:700;color:var(--on-accent);background:var(--surface)}
 .row.picked .ck{background:var(--accent);border-color:var(--accent)}
 .gh .tl{display:flex;align-items:center;gap:12px;min-width:0}
+.gcovs{display:flex;flex:none;gap:6px}
 .gcov{flex:none;width:44px;height:44px;border-radius:50%;background:var(--ph);overflow:hidden;border:1px solid var(--line)}
 .gcov img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 :root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
@@ -871,8 +872,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- liste ---------- */
   var selMode = false, picked = new Set(), lastVisible = [];
-  function gcover(arr) {
-    var a = arr.find(function (x) { return coverSrc(x); }), u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
+  function gcovers(arr) {
+    var w = h('span', { class: 'gcovs' }), c = arr.filter(function (x) { return coverSrc(x); });
+    w.append(gcover(c[0]));
+    if (arr.length > 1) w.append(gcover(c.length > 1 ? c[c.length - 1] : null));
+    return w;
+  }
+  function gcover(a) {
+    var u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
     if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
     return d;
   }
@@ -932,7 +939,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
         var open = filtering || openG.has(k);
         var nb = arr.filter(function (a) { return a.box; }).length;
         var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(open), onclick: function () { if (openG.has(k)) openG.delete(k); else openG.add(k); renderList(); } },
-          h('span', { class: 'tl' }, gcover(arr), h('span', { class: 't', text: arr[0].collana })), h('span', { class: 'c', text: nb + '/' + arr.length + ' in box · ' + (open ? '▴' : '▾') }));
+          h('span', { class: 'tl' }, gcovers(arr), h('span', { class: 't', text: arr[0].collana })), h('span', { class: 'c', text: nb + '/' + arr.length + ' in box · ' + (open ? '▴' : '▾') }));
         var wrap = h('div', { class: 'group' });
         if (selMode) {
           var cnt = arr.filter(function (a) { return picked.has(a.id); }).length;
