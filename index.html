@@ -241,6 +241,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="toolbar">
       <input id="q" type="search" placeholder="Cerca collana, numero, titolo…" aria-label="Cerca">
       <select id="fbox" aria-label="Filtra per box"></select>
+      <select id="fcov" aria-label="Filtra per copertina" style="grid-column:1/-1"><option value="">Tutte le copertine</option><option value="no">Solo albi senza copertina</option><option value="yes">Solo albi con copertina</option></select>
     </div>
     <div id="groups" class="stack"></div>
     <div class="actions cols">
@@ -951,8 +952,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     sel.append(h('option', { value: '', text: 'Tutti i box' }), h('option', { value: '__none', text: 'Senza box' }));
     boxes.forEach(function (b) { sel.append(h('option', { value: b, text: boxLabel(b) })); });
     sel.value = (cur === '__none' || boxes.indexOf(cur) >= 0) ? cur : '';
-    var q = norm($('#q').value).toLowerCase(), bx = sel.value, filtering = !!(q || bx);
+    var q = norm($('#q').value).toLowerCase(), bx = sel.value, cv = $('#fcov').value, filtering = !!(q || bx || cv);
     var items = all.filter(function (a) {
+      if (cv && (cv === 'no') === !!coverSrc(a)) return false;
       if (bx === '__none' ? !!a.box : (bx && a.box !== bx)) return false;
       return !q || [a.collana, a.numero, a.editore, a.box, a.anno, a.titolo].join(' ').toLowerCase().indexOf(q) >= 0;
     }).sort(cmp);
@@ -1568,6 +1570,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#lightbox').addEventListener('click', function () { $('#lightbox').hidden = true; });
   $('#q').addEventListener('input', renderList);
   $('#fbox').addEventListener('change', renderList);
+  $('#fcov').addEventListener('change', renderList);
   $('#btn-export').addEventListener('click', exportCsv);
   $('#btn-import').addEventListener('click', openImport);
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
