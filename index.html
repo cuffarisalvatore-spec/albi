@@ -481,7 +481,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return e;
   }
   function uid() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2); }
-  function numLabel(n) { return !n ? 'senza numero' : isNum(n) ? 'n. ' + n : n; }
+  function numLabel(n) { return !n ? 'volume unico' : isNum(n) ? 'n. ' + n : n; }
   function cmp(a, b) { return a.collana.localeCompare(b.collana, 'it') || a.numero.localeCompare(b.numero, 'it', { numeric: true }); }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
@@ -813,7 +813,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       box.append(h('div', { class: 'match' }, thumb(a), h('div', null, l1, pub, h('div', null, st)), btn));
     });
     if (!ms.length) {
-      box.append(h('p', { class: 'msg', text: c ? (n ? 'Nessun albo con questo numero in ' + c : 'Nessun albo senza numero in ' + c) + '.' : 'Collana non trovata nella tua collezione.' }));
+      box.append(h('p', { class: 'msg', text: c ? (n ? 'Nessun albo con questo numero in ' + c : 'Nessun volume unico in ' + c) + '.' : 'Collana non trovata nella tua collezione.' }));
       showNew = true;
     } else if (!showNew) {
       box.append(h('button', { type: 'button', class: 'btn text', text: 'Non è questo? Aggiungi come nuovo', onclick: function () { showNew = true; renderMatches(); } }));
