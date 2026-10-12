@@ -184,7 +184,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="boxtag">
       <label for="f-box">Box in cui lo metto</label>
       <input id="f-box" autocomplete="off" placeholder="es. 12" list="dl-box">
-      <p class="hint">Resta quello dell'ultimo albo finché non lo cambi.</p>
+      <p class="hint">Resta quello dell’ultimo albo finché non lo cambi. Puoi anche lasciarlo vuoto e metterlo dopo.</p>
     </div>
     <form id="form" class="stack" novalidate>
       <div class="field">
@@ -226,7 +226,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
           </div>
         </div>
         <p class="msg" id="msg" role="alert" hidden></p>
-        <button type="button" class="btn primary" id="btn-new">Aggiungi e metti nel box</button>
+        <button type="button" class="btn primary" id="btn-new">Aggiungi</button>
       </div>
     </form>
     <h2>Ultimi messi in box</h2>
@@ -481,7 +481,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return e;
   }
   function uid() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2); }
-  function numLabel(n) { return isNum(n) ? 'n. ' + n : n; }
+  function numLabel(n) { return !n ? 'senza numero' : isNum(n) ? 'n. ' + n : n; }
   function cmp(a, b) { return a.collana.localeCompare(b.collana, 'it') || a.numero.localeCompare(b.numero, 'it', { numeric: true }); }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
@@ -794,12 +794,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var c = resolveCollana(typed);
     $('#c-hint').textContent = c && c.toLowerCase() !== typed.toLowerCase() ? '→ ' + c : '';
     var newp = $('#newp');
-    if (!typed || !n) {
+    if (!typed) {
       newp.hidden = true; showNew = false;
-      box.append(h('p', { class: 'hint', text: store.size ? 'Scrivi collana e numero: l’albo compare qui, pronto da mettere nel box.' : 'Non hai ancora albi. Importa il file di ComicsBox dalla scheda Collezione, oppure aggiungili uno a uno da qui.' }));
+      box.append(h('p', { class: 'hint', text: store.size ? 'Scrivi la collana e il numero (o lascia il numero vuoto per un volume unico): l’albo compare qui.' : 'Non hai ancora albi. Importa il file di ComicsBox dalla scheda Collezione, oppure aggiungili uno a uno da qui.' }));
       return;
     }
-    var ms = c ? listAll().filter(function (a) { return a.collana === c && numMatches(a.numero, n); }).sort(cmp) : [];
+    var ms = c ? listAll().filter(function (a) { return a.collana === c && (n ? numMatches(a.numero, n) : !a.numero); }).sort(cmp) : [];
     curMatches = ms;
     var bx = currentBox();
     ms.forEach(function (a) {
@@ -813,7 +813,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       box.append(h('div', { class: 'match' }, thumb(a), h('div', null, l1, pub, h('div', null, st)), btn));
     });
     if (!ms.length) {
-      box.append(h('p', { class: 'msg', text: c ? 'Nessun albo con questo numero in ' + c + '.' : 'Collana non trovata nella tua collezione.' }));
+      box.append(h('p', { class: 'msg', text: c ? (n ? 'Nessun albo con questo numero in ' + c : 'Nessun albo senza numero in ' + c) + '.' : 'Collana non trovata nella tua collezione.' }));
       showNew = true;
     } else if (!showNew) {
       box.append(h('button', { type: 'button', class: 'btn text', text: 'Non è questo? Aggiungi come nuovo', onclick: function () { showNew = true; renderMatches(); } }));
@@ -848,7 +848,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function validate(f, needBox) {
     var rec = { collana: norm(f.collana), numero: norm(f.numero), editore: norm(f.editore), box: cleanBox(f.box), anno: norm(f.anno), titolo: norm(f.titolo || '') };
     if (!rec.collana) return { err: 'Scrivi la collana.' };
-    if (!rec.numero) return { err: 'Scrivi il numero (o Unico, Speciale…).' };
     if (!rec.editore) return { err: 'Scrivi l’editore.' };
     if (needBox && !rec.box) return { err: 'Scrivi il box.' };
     if (rec.anno && !(/^\d{4}$/.test(rec.anno) && +rec.anno >= 1900 && +rec.anno <= 2100)) return { err: 'L’anno deve avere 4 cifre, per esempio 1994.' };
@@ -856,20 +855,20 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function addNew() {
     var c = resolveCollana($('#f-collana').value) || norm($('#f-collana').value);
-    var v = validate({ collana: c, numero: $('#f-num').value, editore: $('#f-ed').value, box: $('#f-box').value, anno: $('#f-anno').value }, true);
+    var v = validate({ collana: c, numero: $('#f-num').value, editore: $('#f-ed').value, box: $('#f-box').value, anno: $('#f-anno').value }, false);
     if (v.err) { showMsg($('#msg'), v.err); return; }
     var now = Date.now();
     var a = Object.assign({ id: uid(), url: '', source: 'app', cover: draft.cover, coverState: draft.cover ? draft.state : 'missing', coverId: null,
       coverDirty: !!draft.cover, trash: [], created: now, updated: now, deleted: false, dirty: true }, v.rec);
     store.set(a.id, a);
-    putRec(a); setMeta('box', a.box); flush();
+    putRec(a); if (a.box) setMeta('box', a.box); flush();
     var typedNum = $('#f-num').value;
     $('#f-num').value = nextAfter(typedNum);
     $('#f-anno').value = '';
     draft = { cover: null, state: 'missing' };
     showNew = false; showMsg($('#msg'), '');
     renderDraft(); renderAll();
-    toast('Aggiunto: ' + a.collana + ' ' + numLabel(a.numero) + ' → box ' + a.box, function () {
+    toast('Aggiunto: ' + a.collana + ' ' + numLabel(a.numero) + (a.box ? ' → box ' + a.box : ' (senza box)'), function () {
       a.deleted = true; touch(a); $('#f-num').value = typedNum; renderMatches();
     });
   }
@@ -898,7 +897,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function renderSer() {
     if (!openSer) return;
-    var arr = listAll().filter(function (a) { return a.collana.toLowerCase() === openSer; }).sort(cmp), l = $('#ser-list');
+    var arr = lastVisible.filter(function (a) { return a.collana.toLowerCase() === openSer; }), l = $('#ser-list');
     if (!arr.length) { closeSer(); return; }
     $('#ser-title').textContent = arr[0].collana;
     l.textContent = '';
@@ -1430,7 +1429,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var added = 0, updatedN = 0, changed = [];
     for (var i = 0; i < list.length; i++) {
       var d = list[i];
-      if (!d || !d.id || !norm(d.collana) || !norm(d.numero)) continue;
+      if (!d || !d.id || !norm(d.collana)) continue;
       var rec = fromDoc(String(d.id), { collana: norm(d.collana), numero: norm(d.numero), editore: norm(d.editore), box: cleanBox(d.box), anno: d.anno, url: d.url, titolo: d.titolo,
         source: d.source, coverState: d.coverState === 'none' ? 'none' : 'missing', coverId: null, created: d.created, updated: d.updated, deleted: d.deleted });
       var ex = store.get(rec.id);
