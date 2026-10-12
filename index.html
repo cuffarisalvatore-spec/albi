@@ -147,6 +147,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
 #btn-import,#btn-covs,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
 #btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
+.vbtns{display:flex;flex:none;white-space:nowrap}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tile{display:grid;gap:6px;align-content:start;background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;min-width:0}
+.tile .cv{aspect-ratio:3/4;border-radius:6px;background:var(--ph);overflow:hidden;display:grid;place-items:center;border:1px solid var(--line);color:var(--muted);font-family:var(--font-display);font-size:22px;text-transform:uppercase;text-align:center;overflow-wrap:anywhere}
+.tile .cv span{padding:6px}
+.tile .cv img{width:100%;height:100%;object-fit:cover;display:block}
+.tile .nm{font-family:var(--font-display);text-transform:uppercase;font-weight:700;font-size:16px;line-height:1.1;letter-spacing:.03em;overflow-wrap:anywhere}
+.tile .ct{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
 .ghrow{display:flex;gap:8px;align-items:stretch}
 .ghrow .gh{flex:1;width:auto;min-width:0}
 .gck{flex:none;width:44px;border:2px solid var(--line);border-radius:8px;background:var(--surface);color:var(--on-accent);font:700 20px var(--font-mono);cursor:pointer}
@@ -227,7 +235,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   <section id="v-list" class="view" aria-label="Collezione" hidden>
     <div class="stack" style="gap:8px">
-      <div class="labrow"><span class="lab" id="prog-t"></span><button type="button" class="btn text" id="btn-sel">Seleziona</button></div>
+      <div class="labrow"><span class="lab" id="prog-t"></span><span class="vbtns"><button type="button" class="btn text" id="btn-view">Griglia</button><button type="button" class="btn text" id="btn-sel">Seleziona</button></span></div>
       <div class="meter" aria-hidden="true"><span id="prog-b"></span></div>
     </div>
     <div class="toolbar">
@@ -317,6 +325,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+<div id="ser-bg" class="sheet-bg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ser-title">
+    <div class="labrow"><h2 id="ser-title"></h2><button type="button" class="btn text" id="ser-close">Chiudi</button></div>
+    <div class="list" id="ser-list"></div>
+  </div>
+</div>
 <div id="sheet-bg" class="sheet-bg" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
     <div class="labrow"><h2 id="sheet-title">Modifica albo</h2><button type="button" class="btn text" id="s-close">Chiudi</button></div>
@@ -872,6 +886,24 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- liste ---------- */
   var selMode = false, picked = new Set(), lastVisible = [];
+  var viewGrid = false, openSer = null;
+  try { viewGrid = localStorage.getItem('aib-view') === 'grid'; } catch (e) {}
+  function tileEl(arr) {
+    var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
+    var cv = h('div', { class: 'cv' });
+    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }; cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
+    return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; } },
+      cv, h('span', { class: 'nm', text: arr[0].collana }), h('span', { class: 'ct', text: arr.length + (arr.length === 1 ? ' albo' : ' albi') }));
+  }
+  function renderSer() {
+    if (!openSer) return;
+    var arr = listAll().filter(function (a) { return a.collana.toLowerCase() === openSer; }).sort(cmp), l = $('#ser-list');
+    if (!arr.length) { closeSer(); return; }
+    $('#ser-title').textContent = arr[0].collana;
+    l.textContent = '';
+    arr.forEach(function (a) { l.append(rowEl(a, false, false)); });
+  }
+  function closeSer() { openSer = null; $('#ser-bg').hidden = true; }
   function gcovers(arr) {
     var w = h('span', { class: 'gcovs' }), c = arr.filter(function (x) { return coverSrc(x); });
     w.append(gcover(c[0]));
@@ -935,7 +967,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     } else {
       var groups = new Map();
       items.forEach(function (a) { var k = a.collana.toLowerCase(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
+      var asGrid = viewGrid && !selMode;
+      if (asGrid) g.append(h('div', { class: 'grid3' }));
       groups.forEach(function (arr, k) {
+        if (asGrid) { g.firstChild.append(tileEl(arr)); return; }
         var open = filtering || openG.has(k);
         var nb = arr.filter(function (a) { return a.box; }).length;
         var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(open), onclick: function () { if (openG.has(k)) openG.delete(k); else openG.add(k); renderList(); } },
@@ -959,6 +994,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       });
     }
     lastVisible = items;
+    $('#btn-view').textContent = viewGrid ? 'Elenco' : 'Griglia';
+    $('#btn-view').disabled = selMode;
+    if (openSer) renderSer();
     $('#btn-export').hidden = !all.length;
     updateBar();
   }
@@ -1514,6 +1552,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var t = e.target;
     if (t && t.matches && t.matches('input[type=file][data-kind]')) handlePick(t.dataset.kind, t);
   });
+  $('#btn-view').addEventListener('click', function () { viewGrid = !viewGrid; try { localStorage.setItem('aib-view', viewGrid ? 'grid' : 'list'); } catch (e) {} renderList(); });
+  $('#ser-close').addEventListener('click', closeSer);
+  $('#ser-bg').addEventListener('click', function (e) { if (e.target === $('#ser-bg')) closeSer(); });
   $('#btn-sel').addEventListener('click', function () { setSelMode(!selMode); });
   $('#sel-exit').addEventListener('click', function () { setSelMode(false); });
   $('#sel-all').addEventListener('click', function () { lastVisible.forEach(function (a) { picked.add(a.id); }); renderList(); });
@@ -1544,7 +1585,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#s-save').addEventListener('click', saveSheet);
   $('#s-del').addEventListener('click', deleteSheet);
   $('#s-nocov').addEventListener('click', function () { var a = store.get(editId); if (a) removeCover(a); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#lightbox').hidden) { $('#lightbox').hidden = true; return; } if (!$('#sheet-bg').hidden) closeSheet(); if (!$('#imp-bg').hidden) closeImport(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#lightbox').hidden) { $('#lightbox').hidden = true; return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
   window.addEventListener('online', function () { if (session) { pull(); } else if (sb) showLogin(); renderSync(); });
   window.addEventListener('offline', renderSync);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) pull(); });
