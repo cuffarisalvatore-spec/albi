@@ -1,6 +1,6 @@
 {
-  "name": "Albi in Box",
-  "short_name": "Albi in Box",
+  "name": "inBOX",
+  "short_name": "inBOX",
   "description": "Cataloga gli albi della collezione e assegnali ai box, anche offline.",
   "lang": "it",
   "start_url": "./",

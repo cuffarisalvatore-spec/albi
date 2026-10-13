@@ -5,11 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0b7fb3">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="inBOX">
+<script>try{var tm=localStorage.getItem('aib-theme');if(tm==="light"||tm==="dark")document.documentElement.setAttribute("data-theme",tm)}catch(e){}</script>
 <meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<title>Albi in Box</title>
+<title>inBOX</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -170,6 +172,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root{--violet-line:#c9b8f0}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--violet-line:#54418a}}
 :root[data-theme="dark"]{--violet-line:#54418a}
+.logo{display:flex;align-items:center;gap:3px;font-size:34px;line-height:1}
+.logo .in{font-family:var(--font-display);font-weight:600;text-transform:none;color:var(--accent);letter-spacing:.01em}
+.logo .bx{font-family:var(--font-display);font-weight:700;letter-spacing:.06em;background:var(--accent);color:var(--on-accent);padding:3px 8px 2px;border-radius:6px}
+#theme-seg{margin-top:12px}
 .ghrow{display:flex;gap:8px;align-items:stretch}
 .ghrow .gh{flex:1;width:auto;min-width:0}
 .gck{flex:none;width:44px;border:2px solid var(--line);border-radius:8px;background:var(--surface);color:var(--on-accent);font:700 20px var(--font-mono);cursor:pointer}
@@ -190,7 +196,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 <body>
 <div class="wrap">
   <header class="top">
-    <h1>Albi in Box</h1>
+    <h1 class="logo" aria-label="inBOX"><span class="in">in</span><span class="bx">BOX</span></h1>
     <div class="topr"><span class="sub" id="status"></span><span class="sync" id="sync" role="status"></span></div>
   </header>
   <div id="banner" class="banner" role="status" hidden></div>
@@ -252,7 +258,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="stack" style="gap:8px">
       <div class="labrow"><span class="lab" id="prog-t"></span><button type="button" class="btn text" id="btn-sel">Seleziona</button></div>
       <div class="meter" aria-hidden="true"><span id="prog-b"></span></div>
-      <div class="seg" role="group" aria-label="Vista"><button type="button" data-mode="grid">Griglia</button><button type="button" data-mode="list">Elenco</button><button type="button" data-mode="box">Box</button></div>
+      <div class="seg" id="view-seg" role="group" aria-label="Vista"><button type="button" data-mode="grid">Griglia</button><button type="button" data-mode="list">Elenco</button><button type="button" data-mode="box">Box</button></div>
     </div>
     <div class="toolbar">
       <input id="q" type="search" placeholder="Cerca collana, numero, titolo…" aria-label="Cerca">
@@ -272,6 +278,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
     <p class="hint" id="acct"></p>
+    <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
     <div class="card" id="csvpanel" hidden>
       <p class="hint">Il download non è disponibile qui. Copia il testo e incollalo in un file .csv.</p>
@@ -1048,7 +1055,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       }
     }
     lastVisible = items;
-    document.querySelectorAll('.seg button').forEach(function (bt) { bt.classList.toggle('on', bt.dataset.mode === (selMode ? 'list' : viewMode)); bt.disabled = selMode; });
+    document.querySelectorAll('#view-seg button').forEach(function (bt) { bt.classList.toggle('on', bt.dataset.mode === (selMode ? 'list' : viewMode)); bt.disabled = selMode; });
     if (openSer) renderSer();
     $('#btn-export').hidden = !all.length;
     updateBar();
@@ -1524,7 +1531,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var data;
     try { data = JSON.parse(await file.text()); } catch (e) { toast('Il file non è un backup valido.'); return; }
     var list = data && data.albi;
-    if (!Array.isArray(list)) { toast('Il file non è un backup di Albi in Box.'); return; }
+    if (!Array.isArray(list)) { toast('Il file non è un backup di inBOX.'); return; }
     var added = 0, updatedN = 0, changed = [];
     for (var i = 0; i < list.length; i++) {
       var d = list[i];
@@ -1652,7 +1659,16 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var t = e.target;
     if (t && t.matches && t.matches('input[type=file][data-kind]')) handlePick(t.dataset.kind, t);
   });
-  document.querySelectorAll('.seg button').forEach(function (bt) { bt.addEventListener('click', function () { viewMode = bt.dataset.mode; try { localStorage.setItem('aib-view', viewMode); } catch (e) {} renderList(); }); });
+  function themeMode() { try { var t = localStorage.getItem('aib-theme'); return t === 'light' || t === 'dark' ? t : 'auto'; } catch (e) { return 'auto'; } }
+  function applyTheme(m) {
+    var r = document.documentElement;
+    if (m === 'light' || m === 'dark') r.setAttribute('data-theme', m); else r.removeAttribute('data-theme');
+    try { if (m === 'auto') localStorage.removeItem('aib-theme'); else localStorage.setItem('aib-theme', m); } catch (e) {}
+    document.querySelectorAll('#theme-seg button').forEach(function (bt) { bt.classList.toggle('on', bt.dataset.themeMode === m); });
+  }
+  document.querySelectorAll('#theme-seg button').forEach(function (bt) { bt.addEventListener('click', function () { applyTheme(bt.dataset.themeMode); }); });
+  applyTheme(themeMode());
+  document.querySelectorAll('#view-seg button').forEach(function (bt) { bt.addEventListener('click', function () { viewMode = bt.dataset.mode; try { localStorage.setItem('aib-view', viewMode); } catch (e) {} renderList(); }); });
   $('#ser-close').addEventListener('click', closeSer);
   $('#ser-bg').addEventListener('click', function (e) { if (e.target === $('#ser-bg')) closeSer(); });
   $('#btn-sel').addEventListener('click', function () { setSelMode(!selMode); });
