@@ -160,6 +160,30 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .row .ck{position:relative;touch-action:none}
 .row .ck::after{content:'';position:absolute;inset:-14px -12px -14px -26px}
 #v-list.selmode .row{user-select:none;-webkit-user-select:none}
+/* selezione: schermata compatta, niente copertine, testi più piccoli */
+#v-list.selmode #groups{gap:6px}
+#v-list.selmode .group{gap:4px}
+#v-list.selmode .group>.list{gap:4px;margin-left:16px;padding-left:8px}
+#v-list.selmode .row{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:6px 10px}
+#v-list.selmode .row .thumb{display:none}
+#v-list.selmode .row>div{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 8px;min-width:0}
+#v-list.selmode .row .num{font-size:17px}
+#v-list.selmode .row .l1{display:flex;align-items:center;gap:6px}
+#v-list.selmode .row .pub{font-size:12px}
+#v-list.selmode .chip{font-size:11px;padding:0 5px}
+#v-list.selmode .pill{font-size:10px;padding:0 6px;margin-left:0}
+#v-list.selmode .row .ck{width:22px;height:22px;font-size:14px}
+#v-list.selmode .gh{padding:7px 10px}
+#v-list.selmode .gh .t{font-size:19px}
+#v-list.selmode .gh .c{font-size:11px}
+#v-list.selmode .gcovs{display:none}
+#v-list.selmode .gck{width:36px;font-size:16px}
+.selbar{padding:8px 12px;gap:6px}
+.selbar .r{gap:6px}
+.selbar strong{font-size:14px;white-space:nowrap}
+.selbar .btn.text{font-size:13px;padding:2px 4px;min-height:30px}
+.selbar .btn.small{min-height:36px;font-size:15px;padding:4px 10px}
+.selbar input{min-height:36px;font-size:15px;padding:4px 8px}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
 .seg button{font:inherit;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.05em;font-size:16px;font-weight:600;padding:8px;border:0;background:transparent;color:var(--muted);cursor:pointer;min-height:40px}
 .seg button+button{border-left:1.5px solid var(--line)}
@@ -182,7 +206,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .gck.on,.gck.part{background:var(--accent);border-color:var(--accent)}
 .btn.danger{color:#b3261e;border-color:#b3261e}
 .btn.danger.armed{background:#b3261e;color:#fff}
-#v-list.selmode{padding-bottom:260px}
+#v-list.selmode{padding-bottom:190px}
 .selbar{position:fixed;left:0;right:0;bottom:calc(56px + env(safe-area-inset-bottom,0px));background:var(--surface);border-top:2px solid var(--accent);padding:10px 16px;display:grid;gap:8px;z-index:12;max-width:560px;margin-inline:auto}
 .selbar .r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .selbar input{flex:1;min-width:120px}
