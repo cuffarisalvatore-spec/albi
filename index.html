@@ -975,10 +975,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function closeSer() { openSer = null; $('#ser-bg').hidden = true; layerShut('ser'); }
   function gcovers(arr) {
-    var w = h('span', { class: 'gcovs' }), c = arr.filter(function (x) { return coverSrc(x); });
-    w.append(gcover(c[0]));
-    if (arr.length > 1) w.append(gcover(c.length > 1 ? c[c.length - 1] : null));
-    return w;
+    var c = arr.filter(function (x) { return coverSrc(x); });
+    return h('span', { class: 'gcovs' }, gcover(c.length ? c[c.length - 1] : null));
   }
   function gcover(a) {
     var u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
