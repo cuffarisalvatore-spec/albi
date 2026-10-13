@@ -158,6 +158,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .row .ck{position:relative;touch-action:none}
 .row .ck::after{content:'';position:absolute;inset:-14px -12px -14px -26px}
 #v-list.selmode .row{user-select:none;-webkit-user-select:none}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-family:var(--font-display);text-transform:uppercase;letter-spacing:.05em;font-size:16px;font-weight:600;padding:8px;border:0;background:transparent;color:var(--muted);cursor:pointer;min-height:40px}
+.seg button+button{border-left:1.5px solid var(--line)}
+.seg button.on{background:var(--accent);color:var(--on-accent)}
+.seg button[disabled]{opacity:.55;cursor:default}
+.bcov{flex:none;width:44px;height:44px;border-radius:6px;background:var(--ph);overflow:hidden;border:1px solid var(--line)}
+.bcov img{width:100%;height:100%;object-fit:cover;object-position:50% 30%;transform:scale(1.35);display:block}
+.group>.bxin{margin-left:18px;padding-left:10px;border-left:3px solid var(--accent-soft)}
+.bxin>.group>.list{margin-left:18px;padding-left:10px}
 .ghrow{display:flex;gap:8px;align-items:stretch}
 .ghrow .gh{flex:1;width:auto;min-width:0}
 .gck{flex:none;width:44px;border:2px solid var(--line);border-radius:8px;background:var(--surface);color:var(--on-accent);font:700 20px var(--font-mono);cursor:pointer}
@@ -238,8 +247,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   <section id="v-list" class="view" aria-label="Collezione">
     <div class="stack" style="gap:8px">
-      <div class="labrow"><span class="lab" id="prog-t"></span><span class="vbtns"><button type="button" class="btn text" id="btn-view">Griglia</button><button type="button" class="btn text" id="btn-sel">Seleziona</button></span></div>
+      <div class="labrow"><span class="lab" id="prog-t"></span><button type="button" class="btn text" id="btn-sel">Seleziona</button></div>
       <div class="meter" aria-hidden="true"><span id="prog-b"></span></div>
+      <div class="seg" role="group" aria-label="Vista"><button type="button" data-mode="grid">Griglia</button><button type="button" data-mode="list">Elenco</button><button type="button" data-mode="box">Box</button></div>
     </div>
     <div class="toolbar">
       <input id="q" type="search" placeholder="Cerca collana, numero, titolo…" aria-label="Cerca">
@@ -889,8 +899,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- liste ---------- */
   var selMode = false, picked = new Set(), lastVisible = [];
-  var viewGrid = true, openSer = null, closedF = new Set();
-  try { viewGrid = localStorage.getItem('aib-view') !== 'list'; } catch (e) {}
+  var viewMode = 'grid', openSer = null, closedF = new Set();
+  try { var vm = localStorage.getItem('aib-view'); if (vm === 'list' || vm === 'box') viewMode = vm; } catch (e) {}
+  function isOpen(id, f) { return f ? !closedF.has(id) : openG.has(id); }
+  function toggleOpen(id, f) { var o = isOpen(id, f); if (f) { if (o) closedF.add(id); else closedF.delete(id); } else { if (o) openG.delete(id); else openG.add(id); } renderList(); }
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
@@ -944,6 +956,40 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (!rec.length) { box.append(h('p', { class: 'hint', text: 'Gli albi che metti in un box compaiono qui, pronti da correggere con un tocco.' })); return; }
     rec.forEach(function (a) { box.append(rowEl(a, true)); });
   }
+  function groupBy(arr) {
+    var m = new Map();
+    arr.forEach(function (a) { var k = a.collana.toLowerCase(); if (!m.has(k)) m.set(k, []); m.get(k).push(a); });
+    return m;
+  }
+  function boxCover(arr) {
+    var a = arr.find(function (x) { return coverSrc(x); }), u = a && coverSrc(a), d = h('span', { class: 'bcov', 'aria-hidden': 'true' });
+    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
+    return d;
+  }
+  /* una serie con i suoi numeri (elenco, oppure dentro a un box) */
+  function serieEl(arr, id, filtering, selectable) {
+    var open = isOpen(id, filtering);
+    var nb = arr.filter(function (a) { return a.box; }).length;
+    var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(open), onclick: function () { toggleOpen(id, filtering); } },
+      h('span', { class: 'tl' }, gcovers(arr), h('span', { class: 't', text: arr[0].collana })),
+      h('span', { class: 'c', text: (selectable ? nb + '/' + arr.length + ' in box' : arr.length + (arr.length === 1 ? ' albo' : ' albi')) + ' · ' + (open ? '▴' : '▾') }));
+    var wrap = h('div', { class: 'group' });
+    if (selMode && selectable) {
+      var cnt = arr.filter(function (a) { return picked.has(a.id); }).length;
+      var allOn = cnt === arr.length;
+      wrap.append(h('div', { class: 'ghrow' },
+        h('button', { type: 'button', class: 'gck' + (allOn ? ' on' : cnt ? ' part' : ''), 'aria-label': (allOn ? 'Deseleziona' : 'Seleziona') + ' tutta la serie (' + arr.length + ')',
+          text: allOn ? '✓' : cnt ? '–' : '',
+          onclick: function () { arr.forEach(function (a) { if (allOn) picked.delete(a.id); else picked.add(a.id); }); renderList(); } }),
+        head));
+    } else wrap.append(head);
+    if (open) {
+      var list = h('div', { class: 'list' });
+      arr.forEach(function (a) { list.append(rowEl(a, false, selectable)); });
+      wrap.append(list);
+    }
+    return wrap;
+  }
   function renderList() {
     var all = listAll();
     var inBox = all.filter(function (a) { return a.box; }).length;
@@ -970,37 +1016,36 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     } else if (!items.length) {
       g.append(h('p', { class: 'hint', text: 'Nessun albo corrisponde alla ricerca.' }));
     } else {
-      var groups = new Map();
-      items.forEach(function (a) { var k = a.collana.toLowerCase(); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(a); });
-      var asGrid = viewGrid && !selMode;
-      if (asGrid) g.append(h('div', { class: 'grid3' }));
-      groups.forEach(function (arr, k) {
-        if (asGrid) { g.firstChild.append(tileEl(arr)); return; }
-        var open = filtering ? !closedF.has(k) : openG.has(k);
-        var nb = arr.filter(function (a) { return a.box; }).length;
-        var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(open), onclick: function () { if (filtering ? !closedF.has(k) : openG.has(k)) { if (filtering) closedF.add(k); else openG.delete(k); } else { if (filtering) closedF.delete(k); else openG.add(k); } renderList(); } },
-          h('span', { class: 'tl' }, gcovers(arr), h('span', { class: 't', text: arr[0].collana })), h('span', { class: 'c', text: nb + '/' + arr.length + ' in box · ' + (open ? '▴' : '▾') }));
-        var wrap = h('div', { class: 'group' });
-        if (selMode) {
-          var cnt = arr.filter(function (a) { return picked.has(a.id); }).length;
-          var allOn = cnt === arr.length;
-          wrap.append(h('div', { class: 'ghrow' },
-            h('button', { type: 'button', class: 'gck' + (allOn ? ' on' : cnt ? ' part' : ''), 'aria-label': (allOn ? 'Deseleziona' : 'Seleziona') + ' tutta la serie (' + arr.length + ')',
-              text: allOn ? '✓' : cnt ? '–' : '',
-              onclick: function () { arr.forEach(function (a) { if (allOn) picked.delete(a.id); else picked.add(a.id); }); renderList(); } }),
-            head));
-        } else wrap.append(head);
-        if (open) {
-          var list = h('div', { class: 'list' });
-          arr.forEach(function (a) { list.append(rowEl(a, false, true)); });
-          wrap.append(list);
-        }
-        g.append(wrap);
-      });
+      var asMode = selMode ? 'list' : viewMode;
+      if (asMode === 'box') {
+        var byBox = new Map();
+        items.forEach(function (a) { if (!a.box) return; if (!byBox.has(a.box)) byBox.set(a.box, []); byBox.get(a.box).push(a); });
+        var bkeys = Array.from(byBox.keys()).sort(function (x, y) { return x.localeCompare(y, 'it', { numeric: true }); });
+        if (!bkeys.length) g.append(h('p', { class: 'hint', text: 'Nessun box con albi.' }));
+        bkeys.forEach(function (b) {
+          var barr = byBox.get(b), bid = 'b:' + b, bopen = isOpen(bid, filtering), sg = groupBy(barr);
+          var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(bopen), onclick: function () { toggleOpen(bid, filtering); } },
+            h('span', { class: 'tl' }, boxCover(barr), h('span', { class: 't', text: boxLabel(b) })),
+            h('span', { class: 'c', text: barr.length + (barr.length === 1 ? ' albo' : ' albi') + ' · ' + sg.size + (sg.size === 1 ? ' serie' : ' serie') + ' ' + (bopen ? '▴' : '▾') }));
+          var wrap = h('div', { class: 'group' }, head);
+          if (bopen) {
+            var inner = h('div', { class: 'list bxin' });
+            sg.forEach(function (arr, k) { inner.append(serieEl(arr, 's:' + b + '|' + k, filtering, false)); });
+            wrap.append(inner);
+          }
+          g.append(wrap);
+        });
+      } else {
+        var groups = groupBy(items);
+        if (asMode === 'grid') g.append(h('div', { class: 'grid3' }));
+        groups.forEach(function (arr, k) {
+          if (asMode === 'grid') { g.firstChild.append(tileEl(arr)); return; }
+          g.append(serieEl(arr, k, filtering, true));
+        });
+      }
     }
     lastVisible = items;
-    $('#btn-view').textContent = viewGrid ? 'Elenco' : 'Griglia';
-    $('#btn-view').disabled = selMode;
+    document.querySelectorAll('.seg button').forEach(function (bt) { bt.classList.toggle('on', bt.dataset.mode === (selMode ? 'list' : viewMode)); bt.disabled = selMode; });
     if (openSer) renderSer();
     $('#btn-export').hidden = !all.length;
     updateBar();
@@ -1604,7 +1649,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var t = e.target;
     if (t && t.matches && t.matches('input[type=file][data-kind]')) handlePick(t.dataset.kind, t);
   });
-  $('#btn-view').addEventListener('click', function () { viewGrid = !viewGrid; try { localStorage.setItem('aib-view', viewGrid ? 'grid' : 'list'); } catch (e) {} renderList(); });
+  document.querySelectorAll('.seg button').forEach(function (bt) { bt.addEventListener('click', function () { viewMode = bt.dataset.mode; try { localStorage.setItem('aib-view', viewMode); } catch (e) {} renderList(); }); });
   $('#ser-close').addEventListener('click', closeSer);
   $('#ser-bg').addEventListener('click', function (e) { if (e.target === $('#ser-bg')) closeSer(); });
   $('#btn-sel').addEventListener('click', function () { setSelMode(!selMode); });
