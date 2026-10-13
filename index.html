@@ -889,7 +889,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- liste ---------- */
   var selMode = false, picked = new Set(), lastVisible = [];
-  var viewGrid = true, openSer = null;
+  var viewGrid = true, openSer = null, closedF = new Set();
   try { viewGrid = localStorage.getItem('aib-view') !== 'list'; } catch (e) {}
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
@@ -976,9 +976,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       if (asGrid) g.append(h('div', { class: 'grid3' }));
       groups.forEach(function (arr, k) {
         if (asGrid) { g.firstChild.append(tileEl(arr)); return; }
-        var open = filtering || openG.has(k);
+        var open = filtering ? !closedF.has(k) : openG.has(k);
         var nb = arr.filter(function (a) { return a.box; }).length;
-        var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(open), onclick: function () { if (openG.has(k)) openG.delete(k); else openG.add(k); renderList(); } },
+        var head = h('button', { type: 'button', class: 'gh', 'aria-expanded': String(open), onclick: function () { if (filtering ? !closedF.has(k) : openG.has(k)) { if (filtering) closedF.add(k); else openG.delete(k); } else { if (filtering) closedF.delete(k); else openG.add(k); } renderList(); } },
           h('span', { class: 'tl' }, gcovers(arr), h('span', { class: 't', text: arr[0].collana })), h('span', { class: 'c', text: nb + '/' + arr.length + ' in box · ' + (open ? '▴' : '▾') }));
         var wrap = h('div', { class: 'group' });
         if (selMode) {
@@ -1618,9 +1618,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#s-thumb').addEventListener('click', openLightbox);
   $('#s-thumb').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } });
   $('#lightbox').addEventListener('click', function () { $('#lightbox').hidden = true; });
-  $('#q').addEventListener('input', renderList);
-  $('#fbox').addEventListener('change', renderList);
-  $('#fcov').addEventListener('change', renderList);
+  $('#q').addEventListener('input', function () { closedF.clear(); renderList(); });
+  $('#fbox').addEventListener('change', function () { closedF.clear(); renderList(); });
+  $('#fcov').addEventListener('change', function () { closedF.clear(); renderList(); });
   $('#btn-export').addEventListener('click', exportCsv);
   $('#btn-import').addEventListener('click', openImport);
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
