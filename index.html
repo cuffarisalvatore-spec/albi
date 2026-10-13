@@ -1073,13 +1073,16 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (!drag) return;
     var el = document.elementFromPoint(x, y), row = el && el.closest && el.closest('.row[data-id]');
     if (!row) return;
-    var i = drag.rows.indexOf(row);
-    if (i < 0) return;
-    var lo = Math.min(drag.anchor, i), hi = Math.max(drag.anchor, i);
-    /* chi è uscito dall'intervallo torna com'era prima del trascinamento; chi è dentro prende lo stato scelto */
-    for (var k = drag.lo; k <= drag.hi; k++) if (k < lo || k > hi) paintRow(drag.rows[k], drag.orig[k]);
-    for (k = lo; k <= hi; k++) paintRow(drag.rows[k], drag.on);
-    drag.lo = lo; drag.hi = hi; updateBar();
+    var i = drag.rows.indexOf(row), c = drag.cur;
+    if (i < 0 || i === c) return;
+    var dir = i > c ? 1 : -1;
+    if (!drag.d0) drag.d0 = dir;
+    /* nel verso del primo movimento si applica l'azione di partenza (seleziona o deseleziona); nel verso opposto l'azione contraria */
+    var act = dir === drag.d0 ? drag.on : !drag.on;
+    var from = dir > 0 ? (act === drag.on ? c + 1 : c) : (act === drag.on ? i : i + 1);
+    var to = dir > 0 ? (act === drag.on ? i : i - 1) : (act === drag.on ? c - 1 : c);
+    for (var k = from; k <= to; k++) paintRow(drag.rows[k], act);
+    drag.cur = i; updateBar();
   }
   function dragScroll() {
     if (!drag) return;
@@ -1100,8 +1103,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (e.pointerType === 'touch' && !e.target.closest('.ck')) return;
     var rows = Array.prototype.slice.call(document.querySelectorAll('#groups .row[data-id]'));
     var idx = rows.indexOf(row);
-    drag = { on: !picked.has(row.dataset.id), rows: rows, anchor: idx, lo: idx, hi: idx, x: e.clientX, y: e.clientY,
-      orig: rows.map(function (r) { return picked.has(r.dataset.id); }) };
+    drag = { on: !picked.has(row.dataset.id), rows: rows, cur: idx, d0: 0, x: e.clientX, y: e.clientY };
     paintRow(row, drag.on); dragSkip = true; updateBar();
     cancelAnimationFrame(dragRaf); dragRaf = requestAnimationFrame(dragScroll);
   });
