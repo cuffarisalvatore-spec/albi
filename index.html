@@ -508,6 +508,25 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function cmp(a, b) { return a.collana.localeCompare(b.collana, 'it') || a.numero.localeCompare(b.numero, 'it', { numeric: true }); }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
+  /* tasto/gesto "indietro" di Android (e del browser): ogni livello aperto (scheda, serie, selezione, ricerca, tab) occupa una voce della cronologia */
+  var layers = [], histSkip = 0;
+  function layerOpen(name, close) {
+    for (var i = 0; i < layers.length; i++) if (layers[i].name === name) return;
+    layers.push({ name: name, close: close });
+    try { history.pushState({ aib: name }, ''); } catch (e) {}
+  }
+  function layerShut(name) {
+    for (var i = layers.length - 1; i >= 0; i--) if (layers[i].name === name) {
+      layers.splice(i, 1); histSkip++;
+      try { history.back(); } catch (e) { histSkip--; }
+      return;
+    }
+  }
+  window.addEventListener('popstate', function () {
+    if (histSkip > 0) { histSkip--; return; }
+    var l = layers.pop();
+    if (l) l.close();
+  });
   var store = new Map();
   var idb = null, mem = false;
   var CFG = window.ALBI_CONFIG || {}, sb = null, session = null, connecting = true, syncOn = false, noSync = false, cfgMissing = false, syncErr = '', pulling = false, channel = null, pollTimer = null;
@@ -917,7 +936,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
     if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }; cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
-    return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; } },
+    return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; layerOpen('ser', closeSer); } },
       cv, h('span', { class: 'nm', text: arr[0].collana }), h('span', { class: 'ct', text: arr.length + (arr.length === 1 ? ' albo' : ' albi') }));
   }
   function renderSer() {
@@ -928,7 +947,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     l.textContent = '';
     arr.forEach(function (a) { l.append(rowEl(a, false, false)); });
   }
-  function closeSer() { openSer = null; $('#ser-bg').hidden = true; }
+  function closeSer() { openSer = null; $('#ser-bg').hidden = true; layerShut('ser'); }
   function gcovers(arr) {
     var w = h('span', { class: 'gcovs' }), c = arr.filter(function (x) { return coverSrc(x); });
     w.append(gcover(c[0]));
@@ -1058,8 +1077,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     document.querySelectorAll('#view-seg button').forEach(function (bt) { bt.classList.toggle('on', bt.dataset.mode === (selMode ? 'list' : viewMode)); bt.disabled = selMode; });
     if (openSer) renderSer();
     $('#btn-export').hidden = !all.length;
+    if (filtering) layerOpen('filter', clearFilters); else layerShut('filter');
     updateBar();
   }
+  function clearFilters() { $('#q').value = ''; $('#fbox').value = ''; $('#fcov').value = ''; closedF.clear(); renderList(); }
   /* selezione trascinando: si parte da un albo e si scorre su/giù; da touch si parte dalla casella a destra */
   var drag = null, dragSkip = false, dragRaf = 0;
   function paintRow(el, on) {
@@ -1116,6 +1137,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   document.addEventListener('pointercancel', dragEnd);
   function setSelMode(on) {
     selMode = on;
+    if (on) layerOpen('sel', function () { setSelMode(false); }); else layerShut('sel');
     if (!on) picked.clear();
     $('#btn-sel').textContent = on ? 'Fine selezione' : 'Seleziona';
     $('#v-list').classList.toggle('selmode', on);
@@ -1177,13 +1199,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     toast(recs.length + (recs.length === 1 ? ' albo → ' : ' albi → ') + (bx ? 'box ' + bx : 'senza box'), function () { prev.forEach(function (p) { p[0].box = p[1]; touch(p[0]); }); });
     updateBar();
   }
+  function closeLightbox() { $('#lightbox').hidden = true; layerShut('lb'); }
   function openLightbox() {
     var a = store.get(editId), u = a && coverSrc(a);
     if (!u) return;
     var lb = $('#lightbox');
     lb.textContent = '';
     lb.append(h('img', { src: u, alt: 'Copertina ingrandita' }));
-    lb.hidden = false;
+    lb.hidden = false; layerOpen('lb', closeLightbox);
   }
 
   /* ---------- coda copertine ---------- */
@@ -1239,9 +1262,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var lk = $('#s-link'); lk.hidden = !a.url; if (a.url) lk.href = a.url;
     showMsg($('#s-msg'), '');
     renderSheetCover();
-    $('#sheet-bg').hidden = false;
+    $('#sheet-bg').hidden = false; layerOpen('sheet', closeSheet);
   }
-  function closeSheet() { $('#sheet-bg').hidden = true; editId = null; }
+  function closeSheet() { $('#sheet-bg').hidden = true; editId = null; layerShut('sheet'); }
   function saveSheet() {
     var a = store.get(editId);
     if (!a) return;
@@ -1391,8 +1414,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     });
     return out;
   }
-  function openImport() { impParsed = null; $('#imp-title').textContent = 'Importa da ComicsBox'; renderImport(); $('#imp-bg').hidden = false; }
-  function closeImport() { $('#imp-bg').hidden = true; }
+  function openImport() { impParsed = null; $('#imp-title').textContent = 'Importa da ComicsBox'; renderImport(); $('#imp-bg').hidden = false; layerOpen('imp', closeImport); }
+  function closeImport() { $('#imp-bg').hidden = true; layerShut('imp'); }
   async function onImportFile() {
     var f = $('#in-imp').files && $('#in-imp').files[0];
     $('#in-imp').value = '';
@@ -1476,7 +1499,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var line = h('p', { style: 'margin:0', text: 'Preparo ' + files.length + ' immagini…' });
     var fill = h('span', { style: 'width:0' });
     body.append(line, h('div', { class: 'meter', 'aria-hidden': 'true' }, fill));
-    $('#imp-bg').hidden = false;
+    $('#imp-bg').hidden = false; layerOpen('imp', closeImport);
     var done = 0, ok = 0, already = 0, nomatch = 0, batch = [];
     for (var i = 0; i < files.length; i++) {
       var f = files[i], a = store.get('cb_' + codeFromName(f.name));
@@ -1584,6 +1607,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     document.querySelectorAll('.view').forEach(function (v) { v.hidden = v.id !== id; });
     document.querySelectorAll('.tabs button').forEach(function (b) { b.setAttribute('aria-selected', String(b.dataset.v === id)); });
     window.scrollTo(0, 0);
+    if (id === 'v-list') layerShut('tab'); else layerOpen('tab', function () { showView('v-list'); });
     updateBar();
   }
 
@@ -1688,7 +1712,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#sel-del').addEventListener('click', deleteSel);
   $('#s-thumb').addEventListener('click', openLightbox);
   $('#s-thumb').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(); } });
-  $('#lightbox').addEventListener('click', function () { $('#lightbox').hidden = true; });
+  $('#lightbox').addEventListener('click', closeLightbox);
   $('#q').addEventListener('input', function () { closedF.clear(); renderList(); });
   $('#fbox').addEventListener('change', function () { closedF.clear(); renderList(); });
   $('#fcov').addEventListener('change', function () { closedF.clear(); renderList(); });
@@ -1709,7 +1733,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#s-save').addEventListener('click', saveSheet);
   $('#s-del').addEventListener('click', deleteSheet);
   $('#s-nocov').addEventListener('click', function () { var a = store.get(editId); if (a) removeCover(a); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#lightbox').hidden) { $('#lightbox').hidden = true; return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#lightbox').hidden) { closeLightbox(); return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
   window.addEventListener('online', function () { if (session) { pull(); } else if (sb) showLogin(); renderSync(); });
   window.addEventListener('offline', renderSync);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) pull(); });
