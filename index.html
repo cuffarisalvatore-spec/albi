@@ -1070,19 +1070,21 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var ck = el.querySelector('.ck'); if (ck) ck.textContent = on ? '✓' : '';
   }
   function dragAt(x, y) {
+    if (!drag) return;
     var el = document.elementFromPoint(x, y), row = el && el.closest && el.closest('.row[data-id]');
-    if (!row || !drag) return;
-    var rows = Array.prototype.slice.call(document.querySelectorAll('#groups .row[data-id]'));
-    var i = rows.indexOf(row), j = drag.last;
+    if (!row) return;
+    var i = drag.rows.indexOf(row);
     if (i < 0) return;
-    if (j < 0) j = i;
-    for (var k = Math.min(i, j); k <= Math.max(i, j); k++) paintRow(rows[k], drag.on);
-    drag.last = i; updateBar();
+    var lo = Math.min(drag.anchor, i), hi = Math.max(drag.anchor, i);
+    /* chi è uscito dall'intervallo torna com'era prima del trascinamento; chi è dentro prende lo stato scelto */
+    for (var k = drag.lo; k <= drag.hi; k++) if (k < lo || k > hi) paintRow(drag.rows[k], drag.orig[k]);
+    for (k = lo; k <= hi; k++) paintRow(drag.rows[k], drag.on);
+    drag.lo = lo; drag.hi = hi; updateBar();
   }
   function dragScroll() {
     if (!drag) return;
     var top = (document.querySelector('.toolbar').getBoundingClientRect().bottom) + 30, bot = document.getElementById('selbar').getBoundingClientRect().top - 30, dy = 0;
-    if (drag.y < top) dy = -Math.min(18, (top - drag.y) / 3 + 4); else if (drag.y > bot) dy = Math.min(18, (drag.y - bot) / 3 + 4);
+    if (drag.y < top) dy = -Math.min(7, (top - drag.y) / 12 + 1.5); else if (drag.y > bot) dy = Math.min(7, (drag.y - bot) / 12 + 1.5);
     if (dy) { window.scrollBy(0, dy); dragAt(drag.x, drag.y); }
     dragRaf = requestAnimationFrame(dragScroll);
   }
@@ -1096,8 +1098,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var row = e.target.closest && e.target.closest('#groups .row[data-id]');
     if (!row) return;
     if (e.pointerType === 'touch' && !e.target.closest('.ck')) return;
-    drag = { on: !picked.has(row.dataset.id), last: -1, x: e.clientX, y: e.clientY, moved: false };
-    paintRow(row, drag.on); dragSkip = true; dragAt(e.clientX, e.clientY); updateBar();
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#groups .row[data-id]'));
+    var idx = rows.indexOf(row);
+    drag = { on: !picked.has(row.dataset.id), rows: rows, anchor: idx, lo: idx, hi: idx, x: e.clientX, y: e.clientY,
+      orig: rows.map(function (r) { return picked.has(r.dataset.id); }) };
+    paintRow(row, drag.on); dragSkip = true; updateBar();
     cancelAnimationFrame(dragRaf); dragRaf = requestAnimationFrame(dragScroll);
   });
   document.addEventListener('pointermove', function (e) {
