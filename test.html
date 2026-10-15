@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test ComicsBox</title>
+<style>body{font:16px system-ui,sans-serif;max-width:560px;margin:24px auto;padding:0 16px}input,button{font:inherit;padding:10px;margin:4px 0;width:100%;box-sizing:border-box}pre{background:#eee;padding:12px;white-space:pre-wrap;border-radius:8px}img{max-width:160px;display:block;margin:8px 0}</style></head>
+<body>
+<h2>Test copertine ComicsBox</h2>
+<p>Inserisci il codice di un albo che sai avere la copertina su ComicsBox (quello che compare nel link <b>comicsbox.it/albo/CODICE</b>).</p>
+<input id="c" value="JLA_PP_001">
+<button id="go">Prova</button>
+<pre id="out">in attesa…</pre>
+<div id="pv"></div>
+<script>
+var out=document.getElementById('out');
+function log(t){out.textContent+='\n'+t;}
+document.getElementById('go').onclick=async function(){
+  var code=document.getElementById('c').value.trim(), url='https://www.comicsbox.it/cover/'+code+'.jpg';
+  out.textContent='Provo: '+url; document.getElementById('pv').textContent='';
+  var imgOk=await new Promise(function(r){var i=new Image();i.onload=function(){document.getElementById('pv').append(i);r(true)};i.onerror=function(){r(false)};i.src=url;});
+  log('1) Mostrare l\'immagine nella pagina: '+(imgOk?'OK':'NON riuscito (codice sbagliato o sito irraggiungibile)'));
+  try{
+    var r=await fetch(url,{mode:'cors'}); var b=await r.blob();
+    log('2) Scaricare e conservare il file: OK (stato '+r.status+', '+b.type+', '+Math.round(b.size/1024)+' KB)');
+    log('\nRISULTATO: POSSIBILE, il sito permette di scaricare le copertine dall\'app.');
+  }catch(e){
+    log('2) Scaricare e conservare il file: BLOCCATO dal browser ('+e.message+')');
+    log('\nRISULTATO: '+(imgOk?'NON possibile direttamente dall\'app (il sito non lo permette).':'inconclusivo: prova con un altro codice.'));
+  }
+};
+</script></body></html>
