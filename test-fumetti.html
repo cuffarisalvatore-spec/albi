@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test fumetti americani</title>
+<style>
+body{font:16px system-ui,sans-serif;max-width:600px;margin:20px auto;padding:0 16px;line-height:1.4}
+h2{margin:24px 0 6px}button{font:inherit;padding:10px 14px;margin:4px 4px 4px 0}
+pre{background:#eee;padding:12px;white-space:pre-wrap;border-radius:8px;font-size:14px}
+video{width:100%;max-height:50vh;background:#000;border-radius:8px}
+</style></head><body>
+<h1>Test fumetti americani</h1>
+<p>Due prove indipendenti. Non modificano nulla. Aprila in una finestra <b>in incognito</b>.</p>
+
+<h2>1. Database: raggiungibili dal browser?</h2>
+<p>Per ognuno si vede se il browser permette di interrogarlo da una pagina web. Una risposta di errore del sito (401, 403, 404) conta come <b>sì</b>: significa che il browser può parlargli.</p>
+<button id="b1">Prova i database</button>
+<pre id="o1">in attesa…</pre>
+
+<h2>2. Fotocamera e codici a barre</h2>
+<p>Puoi provare con qualsiasi codice a barre che hai a portata di mano (un prodotto, un libro). Con un fumetto americano vedi anche se legge il codice principale.</p>
+<button id="b2">Avvia fotocamera</button><button id="b3" disabled>Ferma</button>
+<video id="v" playsinline muted hidden></video>
+<pre id="o2">in attesa…</pre>
+
+<script>
+var o1=document.getElementById('o1'),o2=document.getElementById('o2');
+function add(el,t){el.textContent+='\n'+t;}
+var tests=[
+ ['Comic Vine','https://comicvine.gamespot.com/api/issues/?format=json&limit=1'],
+ ['Metron','https://metron.cloud/api/issue/?upc=76194130200100111'],
+ ['Grand Comics Database','https://www.comics.org/'],
+ ['Open Library (ISBN)','https://openlibrary.org/api/books?bibkeys=ISBN:9780140328721&format=json&jscmd=data'],
+ ['Google Books (ISBN)','https://www.googleapis.com/books/v1/volumes?q=isbn:9780140328721']
+];
+document.getElementById('b1').onclick=async function(){
+  o1.textContent='Provo…';
+  for(var i=0;i<tests.length;i++){
+    var t=tests[i];
+    try{
+      var c=new AbortController(),to=setTimeout(function(){c.abort();},12000);
+      var r=await fetch(t[1],{mode:'cors',signal:c.signal}); clearTimeout(to);
+      var tx=''; try{tx=(await r.text()).slice(0,70).replace(/\s+/g,' ');}catch(e){}
+      add(o1,'SÌ  '+t[0]+' · stato '+r.status+(tx?' · «'+tx+'»':''));
+    }catch(e){
+      add(o1,'NO  '+t[0]+' · bloccato dal browser o non raggiungibile ('+(e.name==='AbortError'?'timeout':e.message)+')');
+    }
+  }
+  add(o1,'\nFatto. Copia queste righe e mandamele.');
+};
+
+var stream=null,run=false,seen={};
+document.getElementById('b2').onclick=async function(){
+  o2.textContent='';
+  if(!('BarcodeDetector' in window)){add(o2,'Questo browser NON ha il lettore di codici integrato (BarcodeDetector). Servirebbe una libreria inclusa nell\'app: si può fare.');}
+  var det=null,fm=[];
+  if('BarcodeDetector' in window){
+    try{fm=await BarcodeDetector.getSupportedFormats();}catch(e){}
+    add(o2,'Formati letti: '+(fm.join(', ')||'?'));
+    det=new BarcodeDetector({formats:fm.length?fm:undefined});
+  }
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+  }catch(e){add(o2,'Fotocamera non disponibile: '+e.message);return;}
+  var v=document.getElementById('v');v.srcObject=stream;v.hidden=false;await v.play();
+  document.getElementById('b3').disabled=false;run=true;seen={};
+  add(o2,'Fotocamera attiva. Inquadra un codice a barre…');
+  while(run&&det){
+    try{
+      var res=await det.detect(v);
+      res.forEach(function(b){var k=b.format+':'+b.rawValue;if(!seen[k]){seen[k]=1;add(o2,'LETTO  '+b.format+' · '+b.rawValue+' ('+b.rawValue.length+' cifre)');}});
+    }catch(e){}
+    await new Promise(function(r){setTimeout(r,250);});
+  }
+};
+document.getElementById('b3').onclick=function(){run=false;if(stream)stream.getTracks().forEach(function(t){t.stop();});document.getElementById('v').hidden=true;this.disabled=true;add(o2,'Fermata.');};
+</script></body></html>
