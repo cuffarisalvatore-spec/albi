@@ -793,8 +793,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
         var r = await sb.storage.from('covers').list(uidp, { limit: 1000, offset: off });
         if (r.error) throw r.error;
         (r.data || []).forEach(function (f) { have.add(uidp + '/' + f.name); });
-        if (!r.data || r.data.length < 1000) break;
-        off += 1000;
+        if (!r.data || !r.data.length) break;
+        off += r.data.length;
       }
       var todo = [];
       store.forEach(function (a) { if (!a.deleted && a.coverId && !a.coverDirty && a.coverId.indexOf(uidp + '/') === 0 && !have.has(thumbPath(a.coverId))) todo.push(a); });
