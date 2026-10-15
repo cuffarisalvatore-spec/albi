@@ -226,6 +226,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <h1 class="logo" aria-label="inBOX"><span class="in">in</span><span class="bx">BOX</span></h1>
     <div class="topr"><span class="sub" id="status"></span><span class="sync" id="sync" role="status"></span></div>
   </header>
+  <div id="cachepanel" class="card" hidden></div>
   <div id="banner" class="banner" role="status" hidden></div>
 
   <section id="v-add" class="view" aria-label="Metti un albo in un box" hidden>
@@ -572,11 +573,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function openDb() {
     return new Promise(function (res, rej) {
       var r;
-      try { r = indexedDB.open('albi-in-box', 1); } catch (e) { rej(e); return; }
+      try { r = indexedDB.open('albi-in-box', 2); } catch (e) { rej(e); return; }
       r.onupgradeneeded = function () {
         var d = r.result;
-        d.createObjectStore('albi', { keyPath: 'id' });
-        d.createObjectStore('meta', { keyPath: 'k' });
+        if (!d.objectStoreNames.contains('albi')) d.createObjectStore('albi', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', { keyPath: 'k' });
+        if (!d.objectStoreNames.contains('thumbs')) d.createObjectStore('thumbs', { keyPath: 'k' });
       };
       r.onsuccess = function () { res(r.result); };
       r.onerror = function () { rej(r.error); };
@@ -628,11 +630,34 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   var noThumb = new Set(), THUMB_PX = 240;
   function thumbPath(p) { return p.replace(/\.[a-z0-9]+$/i, '') + '_t.jpg'; }
   function pubUrl(p) { return CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + p; }
+  /* miniature tenute sul dispositivo (IndexedDB): coverId -> Blob */
+  var tmap = new Map(), tUrls = new Map();
+  function tUrl(id) {
+    var o = tUrls.get(id);
+    if (o) return o;
+    var b = tmap.get(id);
+    if (!b) return null;
+    o = URL.createObjectURL(b); tUrls.set(id, o);
+    return o;
+  }
+  function saveThumb(id, blob) {
+    if (!blob || !id) return;
+    var old = tUrls.get(id); if (old) { URL.revokeObjectURL(old); tUrls.delete(id); }
+    tmap.set(id, blob);
+    if (idb && !mem) { try { tx('thumbs', 'readwrite', function (st) { return st.put({ k: id, b: blob }); }).catch(function () {}); } catch (e) {} }
+  }
+  function delThumb(id) {
+    var old = tUrls.get(id); if (old) { URL.revokeObjectURL(old); tUrls.delete(id); }
+    tmap.delete(id);
+    if (idb && !mem) { try { tx('thumbs', 'readwrite', function (st) { return st.delete(id); }).catch(function () {}); } catch (e) {} }
+  }
   function putImg(img, a, fail) {
-    var full = coverSrc(a), t = a.coverId && !noThumb.has(a.coverId) ? pubUrl(thumbPath(a.coverId)) : null;
-    if (!t) { img.onerror = fail; img.src = full; return; }
-    img.onerror = function () { noThumb.add(a.coverId); img.onerror = fail; img.src = full; };
-    img.src = t;
+    var full = coverSrc(a), id = a.coverId, lt = id && tUrl(id);
+    var t = id && !noThumb.has(id) ? pubUrl(thumbPath(id)) : null;
+    var steps = [lt, t, full].filter(Boolean), i = 0;
+    function next() { if (i >= steps.length) { img.onerror = null; fail(); return; } img.src = steps[i++]; }
+    img.onerror = function () { if (id && t && steps[i - 1] === t) noThumb.add(id); next(); };
+    next();
   }
   function thumb(a) {
     var d = h('div', { class: 'thumb' }), u = a ? coverSrc(a) : null;
@@ -755,6 +780,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     renderSync();
     flush();
     thumbSweep();
+    thumbFill();
   }
   /* crea in sottofondo le miniature mancanti (copertine caricate prima di questa versione) */
   var sweeping = false, sweepMsg = '', sweepDone = false;
@@ -785,6 +811,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
                 var up = await sb.storage.from('covers').upload(thumbPath(a.coverId), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
                 if (up.error && isNetErr(up.error)) { stop = true; return; }
                 if (!up.error) noThumb.delete(a.coverId);
+                saveThumb(a.coverId, tb);
               }
             } catch (e) { if (isNetErr(e)) { stop = true; return; } }
             done++;
@@ -797,6 +824,59 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       } else sweepDone = true;
     } catch (e) { /* si riprova al prossimo aggiornamento */ }
     sweepMsg = ''; sweeping = false; renderSync();
+    thumbFill();
+  }
+  /* scarica sul dispositivo le miniature che mancano, così lo scorrimento non dipende dalla rete */
+  var filling = false, fillMsg = '';
+  async function thumbFill() {
+    if (filling || mem || !idb) return;
+    filling = true;
+    try {
+      var ids = new Set(), todo = [];
+      store.forEach(function (a) { if (!a.deleted && a.coverId) { ids.add(a.coverId); if (!a.coverDirty && !tmap.has(a.coverId)) todo.push(a); } });
+      if (store.size) Array.from(tmap.keys()).forEach(function (k) { if (!ids.has(k)) delThumb(k); });
+      var total = todo.length, done = 0, i = 0, stop = false;
+      var wk = async function () {
+        while (!stop) {
+          var a = todo[i++]; if (!a) return;
+          try {
+            var tb = null;
+            if (a.cover) tb = await makeThumb(a.cover);
+            else if (!noThumb.has(a.coverId)) {
+              if (navigator.onLine === false) { stop = true; return; }
+              var rs = await fetch(pubUrl(thumbPath(a.coverId)));
+              if (rs.ok) { var bl = await rs.blob(); if (bl.size > 0 && /^image\//.test(bl.type)) tb = bl; }
+              else if (rs.status === 400 || rs.status === 404) noThumb.add(a.coverId);
+            }
+            if (tb) saveThumb(a.coverId, tb);
+          } catch (e) { stop = true; return; }
+          done++;
+          if (done % 25 === 0) { fillMsg = 'miniature sul dispositivo ' + done + '/' + total; renderSync(); }
+        }
+      };
+      await Promise.all([wk(), wk(), wk(), wk()]);
+    } catch (e) { /* si riprova */ }
+    fillMsg = ''; filling = false; renderSync(); updateCacheInfo();
+  }
+  function fmtB(n) { return n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+  async function updateCacheInfo() {
+    var box = $('#cachepanel');
+    if (!box || box.hidden) return;
+    var tot = 0, n = 0, want = 0;
+    tmap.forEach(function (b) { tot += b.size; n++; });
+    store.forEach(function (a) { if (!a.deleted && a.coverId) want++; });
+    var full = 0;
+    store.forEach(function (a) { if (a.cover && !a.deleted) full += a.cover.size || 0; });
+    var est = '';
+    try { if (navigator.storage && navigator.storage.estimate) { var e = await navigator.storage.estimate(); est = 'Spazio totale usato dall’app: ' + fmtB(e.usage || 0) + (e.quota ? ' su ' + fmtB(e.quota) + ' disponibili' : '') + '.'; } } catch (e2) {}
+    box.textContent = '';
+    box.append(h('p', { class: 'hint', text: 'Miniature sul dispositivo: ' + n + ' di ' + want + ' · ' + fmtB(tot) + (filling ? ' (in corso…)' : '') }),
+      h('p', { class: 'hint', text: 'Copertine originali salvate qui: ' + fmtB(full) + '. ' + est }),
+      h('div', { class: 'actions cols' },
+        h('button', { type: 'button', class: 'btn', text: 'Aggiorna miniature', onclick: function () { sweepDone = false; thumbSweep(); thumbFill(); setTimeout(updateCacheInfo, 400); } }),
+        h('button', { type: 'button', class: 'btn', text: 'Svuota miniature', onclick: function () {
+          Array.from(tmap.keys()).forEach(delThumb); noThumb.clear(); updateCacheInfo(); setTimeout(thumbFill, 200);
+        } })));
   }
   function startSync() {
     if (syncOn || !ready()) return;
@@ -830,7 +910,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     await putRec(a);
     try {
       var tb = await makeThumb(a.cover);
-      if (tb) { var tr = await sb.storage.from('covers').upload(thumbPath(path), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true }); if (!tr.error) noThumb.delete(path); }
+      if (tb) { var tr = await sb.storage.from('covers').upload(thumbPath(path), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true }); if (!tr.error) noThumb.delete(path); saveThumb(path, tb); }
     } catch (e) { /* la sistemerà il controllo miniature */ }
     return 'ok';
   }
@@ -842,7 +922,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     batch.forEach(function (a, i) {
       if (a.updated === stamps[i]) {
         a.dirty = false;
-        (a.trash || []).forEach(function (p) { if (p.indexOf('/') > 0) { gone.push(p); gone.push(thumbPath(p)); } });
+        (a.trash || []).forEach(function (p) { if (p.indexOf('/') > 0) { gone.push(p); gone.push(thumbPath(p)); delThumb(p); } });
         a.trash = [];
       } else flushAgain = true;
     });
@@ -899,7 +979,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     else if (!session || noSync) { txt = navigator.onLine === false ? 'offline · solo su questo dispositivo' : 'non connesso'; cls = 'warn'; }
     else if (n > 0) { txt = (navigator.onLine === false ? 'in attesa di rete · ' : '') + n + ' da sincronizzare'; cls = 'warn'; }
     else if (syncErr) { txt = syncErr; cls = 'bad'; }
-    else if (sweepMsg) { txt = sweepMsg; cls = ''; }
+    else if (sweepMsg || fillMsg) { txt = sweepMsg || fillMsg; cls = ''; }
     else { txt = 'sincronizzato'; cls = 'ok'; }
     el.textContent = txt;
     el.className = 'sync ' + cls;
@@ -1897,6 +1977,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
         if (!a.trash) a.trash = [];
         store.set(a.id, a);
       });
+      try {
+        var trs = await tx('thumbs', 'readonly', function (s) { return s.getAll(); }) || [];
+        trs.forEach(function (r) { if (r && r.b) tmap.set(r.k, r.b); });
+      } catch (e) { /* senza miniature locali si usa la rete */ }
       var m = await tx('meta', 'readonly', function (s) { return s.get('box'); });
       if (m && m.v) $('#f-box').value = cleanBox(m.v);
       try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* facoltativo */ }
@@ -1907,6 +1991,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       b.hidden = false;
     }
     renderAll();
+    var sy = $('#sync');
+    sy.style.cursor = 'pointer';
+    sy.addEventListener('click', function () { var b = $('#cachepanel'); b.hidden = !b.hidden; updateCacheInfo(); });
+    setTimeout(thumbFill, 2500);
     connect();
     handleShared();
   })();
