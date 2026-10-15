@@ -1,6 +1,6 @@
 /* Service worker di inBOX: apre l'app anche senza rete.
    Cambia VERSION quando pubblichi una nuova versione dei file. */
-var VERSION = 'v28';
+var VERSION = 'v29';
 var SHELL = 'albi-shell-' + VERSION;
 var RUNTIME = 'albi-runtime-v1';
 var FILES = ['./', 'index.html', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest',
@@ -21,7 +21,7 @@ function swr(req, cacheName) {
       var net = fetch(req).then(function (res) {
         if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
         return res;
-      }).catch(function () { return hit; });
+      }).catch(function () { return hit || Response.error(); });
       return hit || net;
     });
   });
@@ -55,6 +55,8 @@ self.addEventListener('fetch', function (e) {
       : swr(req, SHELL));
     return;
   }
+  // richieste di servizio dell'app (?nc=1): vanno dritte in rete, senza riempire la cache
+  if (url.searchParams.has('nc')) return;
   // copertine su Supabase e caratteri Google: dalla cache, aggiornate in sottofondo
   if (url.pathname.indexOf('/storage/v1/object/public/covers/') >= 0 || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     e.respondWith(swr(req, RUNTIME));

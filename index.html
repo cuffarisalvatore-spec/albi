@@ -783,7 +783,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     thumbFill();
   }
   /* crea in sottofondo le miniature mancanti (copertine caricate prima di questa versione) */
-  var sweeping = false, sweepMsg = '', sweepDone = false;
+  var sweeping = false, sweepMsg = '', sweepDone = false, sweepTry = 0;
   async function thumbSweep() {
     if (sweeping || sweepDone || !ready()) return;
     sweeping = true;
@@ -805,7 +805,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
             var a = todo[i++]; if (!a) return;
             try {
               var src = a.cover;
-              if (!src) { var rs = await fetch(pubUrl(a.coverId)); if (!rs.ok) { done++; continue; } src = await rs.blob(); }
+              if (!src) { var rs = await fetch(pubUrl(a.coverId) + '?nc=1', { cache: 'no-store' }); if (!rs.ok) { done++; continue; } src = await rs.blob(); }
               var tb = await makeThumb(src);
               if (tb) {
                 var up = await sb.storage.from('covers').upload(thumbPath(a.coverId), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
@@ -815,48 +815,68 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
               }
             } catch (e) { if (isNetErr(e)) { stop = true; return; } }
             done++;
-            if (done % 10 === 0 || done === total) { sweepMsg = 'miniature ' + done + '/' + total; renderSync(); }
+            if (done % 5 === 0 || done === total) { sweepMsg = 'creo miniature ' + done + '/' + total; renderSync(); if (done % 25 === 0) panelRefresh(); }
           }
         };
-        await Promise.all([wk(), wk()]);
+        await Promise.all([wk(), wk(), wk()]);
         if (!stop) scheduleRender();
         sweepDone = !stop;
       } else sweepDone = true;
     } catch (e) { /* si riprova al prossimo aggiornamento */ }
     sweepMsg = ''; sweeping = false; renderSync();
+    if (!sweepDone && sweepTry++ < 12) setTimeout(thumbSweep, 30000);
     thumbFill();
   }
   /* scarica sul dispositivo le miniature che mancano, così lo scorrimento non dipende dalla rete */
-  var filling = false, fillMsg = '';
+  var filling = false, fillMsg = '', fillTry = 0, fillTimer = null;
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function panelRefresh() { var pn = $('#cachepanel'); if (pn && !pn.hidden) updateCacheInfo(); }
   async function thumbFill() {
     if (filling || mem || !idb) return;
-    filling = true;
+    filling = true; clearTimeout(fillTimer);
+    var missing = 0, left = 0;
     try {
       var ids = new Set(), todo = [];
       store.forEach(function (a) { if (!a.deleted && a.coverId) { ids.add(a.coverId); if (!a.coverDirty && !tmap.has(a.coverId)) todo.push(a); } });
       if (store.size) Array.from(tmap.keys()).forEach(function (k) { if (!ids.has(k)) delThumb(k); });
-      var total = todo.length, done = 0, i = 0, stop = false;
+      var total = todo.length, done = 0, i = 0, stop = false, fails = 0;
       var wk = async function () {
         while (!stop) {
           var a = todo[i++]; if (!a) return;
           try {
             var tb = null;
             if (a.cover) tb = await makeThumb(a.cover);
-            else if (!noThumb.has(a.coverId)) {
+            else {
               if (navigator.onLine === false) { stop = true; return; }
-              var rs = await fetch(pubUrl(thumbPath(a.coverId)));
-              if (rs.ok) { var bl = await rs.blob(); if (bl.size > 0 && /^image\//.test(bl.type)) tb = bl; }
-              else if (rs.status === 400 || rs.status === 404) noThumb.add(a.coverId);
+              var rs = await fetch(pubUrl(thumbPath(a.coverId)) + '?nc=1', { cache: 'no-store' });
+              if (rs.ok) { var bl = await rs.blob(); if (bl.size > 0 && /^image\//.test(bl.type)) tb = bl; else fails++; }
+              else if (rs.status === 400 || rs.status === 404) missing++;
+              else fails++;
             }
-            if (tb) saveThumb(a.coverId, tb);
-          } catch (e) { stop = true; return; }
+            if (tb) { saveThumb(a.coverId, tb); fails = 0; }
+          } catch (e) {
+            fails++;
+            if (fails >= 8) { stop = true; return; }
+            a._try = (a._try || 0) + 1;
+            if (a._try < 3) todo.push(a);
+            await sleep(500 * fails);
+          }
           done++;
-          if (done % 25 === 0) { fillMsg = 'miniature sul dispositivo ' + done + '/' + total; renderSync(); }
+          if (done % 5 === 0) { fillMsg = 'miniature sul dispositivo ' + done + '/' + total; renderSync(); if (done % 25 === 0) panelRefresh(); }
         }
       };
-      await Promise.all([wk(), wk(), wk(), wk()]);
-    } catch (e) { /* si riprova */ }
-    fillMsg = ''; filling = false; renderSync(); updateCacheInfo();
+      if (total) { fillMsg = 'miniature sul dispositivo 0/' + total; renderSync(); }
+      await Promise.all([wk(), wk(), wk()]);
+      store.forEach(function (a) { if (!a.deleted && a.coverId && !a.coverDirty && !tmap.has(a.coverId)) left++; });
+    } catch (e) { left = 1; }
+    fillMsg = ''; filling = false; renderSync(); panelRefresh();
+    if (left > 0 && fillTry < 40) {
+      fillTry++;
+      var gap = missing ? 40000 : 15000;
+      fillTimer = setTimeout(function () {
+        if (missing && !sweeping) { sweepDone = false; thumbSweep(); } else thumbFill();
+      }, gap);
+    } else if (!left) fillTry = 0;
   }
   function fmtB(n) { return n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
   async function updateCacheInfo() {
