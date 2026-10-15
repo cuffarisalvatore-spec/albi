@@ -154,7 +154,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .tile{display:grid;gap:6px;align-content:start;background:none;border:0;padding:0;font:inherit;color:inherit;text-align:left;cursor:pointer;min-width:0}
 .tile .cv{aspect-ratio:3/4;border-radius:6px;background:var(--ph);overflow:hidden;display:grid;place-items:center;border:1px solid var(--line);color:var(--muted);font-family:var(--font-display);font-size:22px;text-transform:uppercase;text-align:center;overflow-wrap:anywhere}
 .tile .cv span{padding:6px}
-.tile{content-visibility:auto;contain-intrinsic-size:auto 190px}
 .tile .cv img{width:100%;height:100%;object-fit:cover;display:block}
 .tile .nm{font-family:var(--font-display);text-transform:uppercase;font-weight:700;font-size:16px;line-height:1.1;letter-spacing:.03em;overflow-wrap:anywhere}
 .tile .ct{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
@@ -226,7 +225,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <h1 class="logo" aria-label="inBOX"><span class="in">in</span><span class="bx">BOX</span></h1>
     <div class="topr"><span class="sub" id="status"></span><span class="sync" id="sync" role="status"></span></div>
   </header>
-  <div id="cachepanel" class="card" hidden></div>
   <div id="banner" class="banner" role="status" hidden></div>
 
   <section id="v-add" class="view" aria-label="Metti un albo in un box" hidden>
@@ -573,12 +571,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function openDb() {
     return new Promise(function (res, rej) {
       var r;
-      try { r = indexedDB.open('albi-in-box', 2); } catch (e) { rej(e); return; }
+      try { r = indexedDB.open('albi-in-box'); } catch (e) { rej(e); return; }
       r.onupgradeneeded = function () {
         var d = r.result;
-        if (!d.objectStoreNames.contains('albi')) d.createObjectStore('albi', { keyPath: 'id' });
-        if (!d.objectStoreNames.contains('meta')) d.createObjectStore('meta', { keyPath: 'k' });
-        if (!d.objectStoreNames.contains('thumbs')) d.createObjectStore('thumbs', { keyPath: 'k' });
+        d.createObjectStore('albi', { keyPath: 'id' });
+        d.createObjectStore('meta', { keyPath: 'k' });
       };
       r.onsuccess = function () { res(r.result); };
       r.onerror = function () { rej(r.error); };
@@ -626,44 +623,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return a.coverId ? CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + a.coverId : null;
   }
   function dropUrl(id) { var c = urlCache.get(id); if (c) { URL.revokeObjectURL(c.url); urlCache.delete(id); } }
-  /* miniature: ogni copertina ha una versione piccola (_t.jpg) usata in griglia, cerchi ed elenchi */
-  var noThumb = new Set(), THUMB_PX = 240;
-  function thumbPath(p) { return p.replace(/\.[a-z0-9]+$/i, '') + '_t.jpg'; }
-  function pubUrl(p) { return CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + p; }
-  /* miniature tenute sul dispositivo (IndexedDB): coverId -> Blob */
-  var tmap = new Map(), tUrls = new Map();
-  function tUrl(id) {
-    var o = tUrls.get(id);
-    if (o) return o;
-    var b = tmap.get(id);
-    if (!b) return null;
-    o = URL.createObjectURL(b); tUrls.set(id, o);
-    return o;
-  }
-  function saveThumb(id, blob) {
-    if (!blob || !id) return;
-    var old = tUrls.get(id); if (old) { URL.revokeObjectURL(old); tUrls.delete(id); }
-    tmap.set(id, blob);
-    if (idb && !mem) { try { tx('thumbs', 'readwrite', function (st) { return st.put({ k: id, b: blob }); }).catch(function () {}); } catch (e) {} }
-  }
-  function delThumb(id) {
-    var old = tUrls.get(id); if (old) { URL.revokeObjectURL(old); tUrls.delete(id); }
-    tmap.delete(id);
-    if (idb && !mem) { try { tx('thumbs', 'readwrite', function (st) { return st.delete(id); }).catch(function () {}); } catch (e) {} }
-  }
-  function putImg(img, a, fail) {
-    var full = coverSrc(a), id = a.coverId, lt = id && tUrl(id);
-    var t = id && !noThumb.has(id) ? pubUrl(thumbPath(id)) : null;
-    var steps = [lt, t, full].filter(Boolean), i = 0;
-    function next() { if (i >= steps.length) { img.onerror = null; fail(); return; } img.src = steps[i++]; }
-    img.onerror = function () { if (id && t && steps[i - 1] === t) noThumb.add(id); next(); };
-    next();
-  }
   function thumb(a) {
     var d = h('div', { class: 'thumb' }), u = a ? coverSrc(a) : null;
     if (u) {
-      var img = h('img', { alt: '', loading: 'lazy', decoding: 'async' });
-      putImg(img, a, function () { img.remove(); d.textContent = '—'; });
+      var img = h('img', { src: u, alt: '', loading: 'lazy' });
+      img.onerror = function () { img.remove(); d.textContent = '—'; };
       d.append(img);
     } else d.textContent = '—';
     return d;
@@ -681,18 +645,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       var blob = await new Promise(function (r) { c.toBlob(r, 'image/jpeg', 0.8); });
       return blob || file;
     } catch (e) { return file; }
-  }
-
-  async function makeThumb(blob) {
-    try {
-      var bmp = await createImageBitmap(blob);
-      var sc = Math.min(1, THUMB_PX / Math.max(bmp.width, bmp.height));
-      var c = document.createElement('canvas');
-      c.width = Math.max(1, Math.round(bmp.width * sc)); c.height = Math.max(1, Math.round(bmp.height * sc));
-      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-      if (bmp.close) bmp.close();
-      return await new Promise(function (r) { c.toBlob(r, 'image/jpeg', 0.72); });
-    } catch (e) { return null; }
   }
 
   function toast(text, undo) {
@@ -779,124 +731,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     pulling = false;
     renderSync();
     flush();
-    thumbSweep();
-    thumbFill();
-  }
-  /* crea in sottofondo le miniature mancanti (copertine caricate prima di questa versione) */
-  var sweeping = false, sweepMsg = '', sweepDone = false, sweepTry = 0;
-  async function thumbSweep() {
-    if (sweeping || sweepDone || !ready()) return;
-    sweeping = true;
-    try {
-      var have = new Set(), off = 0, uidp = session.user.id;
-      for (;;) {
-        var r = await sb.storage.from('covers').list(uidp, { limit: 1000, offset: off });
-        if (r.error) throw r.error;
-        (r.data || []).forEach(function (f) { have.add(uidp + '/' + f.name); });
-        if (!r.data || !r.data.length) break;
-        off += r.data.length;
-      }
-      var todo = [];
-      store.forEach(function (a) { if (!a.deleted && a.coverId && !a.coverDirty && a.coverId.indexOf(uidp + '/') === 0 && !have.has(thumbPath(a.coverId))) todo.push(a); });
-      var total = todo.length, done = 0, i = 0, stop = false;
-      if (total) {
-        var wk = async function () {
-          while (!stop) {
-            var a = todo[i++]; if (!a) return;
-            try {
-              var src = a.cover;
-              if (!src) { var rs = await fetch(pubUrl(a.coverId) + '?nc=1', { cache: 'no-store' }); if (!rs.ok) { done++; continue; } src = await rs.blob(); }
-              var tb = await makeThumb(src);
-              if (tb) {
-                var up = await sb.storage.from('covers').upload(thumbPath(a.coverId), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
-                if (up.error && isNetErr(up.error)) { stop = true; return; }
-                if (!up.error) noThumb.delete(a.coverId);
-                saveThumb(a.coverId, tb);
-              }
-            } catch (e) { if (isNetErr(e)) { stop = true; return; } }
-            done++;
-            if (done % 5 === 0 || done === total) { sweepMsg = 'creo miniature ' + done + '/' + total; renderSync(); if (done % 25 === 0) panelRefresh(); }
-          }
-        };
-        await Promise.all([wk(), wk(), wk()]);
-        if (!stop) scheduleRender();
-        sweepDone = !stop;
-      } else sweepDone = true;
-    } catch (e) { /* si riprova al prossimo aggiornamento */ }
-    sweepMsg = ''; sweeping = false; renderSync();
-    if (!sweepDone && sweepTry++ < 12) setTimeout(thumbSweep, 30000);
-    thumbFill();
-  }
-  /* scarica sul dispositivo le miniature che mancano, così lo scorrimento non dipende dalla rete */
-  var filling = false, fillMsg = '', fillTry = 0, fillTimer = null;
-  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-  function panelRefresh() { var pn = $('#cachepanel'); if (pn && !pn.hidden) updateCacheInfo(); }
-  async function thumbFill() {
-    if (filling || mem || !idb) return;
-    filling = true; clearTimeout(fillTimer);
-    var missing = 0, left = 0;
-    try {
-      var ids = new Set(), todo = [];
-      store.forEach(function (a) { if (!a.deleted && a.coverId) { ids.add(a.coverId); if (!a.coverDirty && !tmap.has(a.coverId)) todo.push(a); } });
-      if (store.size) Array.from(tmap.keys()).forEach(function (k) { if (!ids.has(k)) delThumb(k); });
-      var total = todo.length, done = 0, i = 0, stop = false, fails = 0;
-      var wk = async function () {
-        while (!stop) {
-          var a = todo[i++]; if (!a) return;
-          try {
-            var tb = null;
-            if (a.cover) tb = await makeThumb(a.cover);
-            else {
-              if (navigator.onLine === false) { stop = true; return; }
-              var rs = await fetch(pubUrl(thumbPath(a.coverId)) + '?nc=1', { cache: 'no-store' });
-              if (rs.ok) { var bl = await rs.blob(); if (bl.size > 0 && /^image\//.test(bl.type)) tb = bl; else fails++; }
-              else if (rs.status === 400 || rs.status === 404) missing++;
-              else fails++;
-            }
-            if (tb) { saveThumb(a.coverId, tb); fails = 0; }
-          } catch (e) {
-            fails++;
-            if (fails >= 8) { stop = true; return; }
-            a._try = (a._try || 0) + 1;
-            if (a._try < 3) todo.push(a);
-            await sleep(500 * fails);
-          }
-          done++;
-          if (done % 5 === 0) { fillMsg = 'miniature sul dispositivo ' + done + '/' + total; renderSync(); if (done % 25 === 0) panelRefresh(); }
-        }
-      };
-      if (total) { fillMsg = 'miniature sul dispositivo 0/' + total; renderSync(); }
-      await Promise.all([wk(), wk(), wk()]);
-      store.forEach(function (a) { if (!a.deleted && a.coverId && !a.coverDirty && !tmap.has(a.coverId)) left++; });
-    } catch (e) { left = 1; }
-    fillMsg = ''; filling = false; renderSync(); panelRefresh();
-    if (left > 0 && fillTry < 40) {
-      fillTry++;
-      var gap = missing ? 40000 : 15000;
-      fillTimer = setTimeout(function () {
-        if (missing && !sweeping) { sweepDone = false; thumbSweep(); } else thumbFill();
-      }, gap);
-    } else if (!left) fillTry = 0;
-  }
-  function fmtB(n) { return n < 1048576 ? Math.round(n / 1024) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
-  async function updateCacheInfo() {
-    var box = $('#cachepanel');
-    if (!box || box.hidden) return;
-    var tot = 0, n = 0, want = 0;
-    tmap.forEach(function (b) { tot += b.size; n++; });
-    store.forEach(function (a) { if (!a.deleted && a.coverId) want++; });
-    var full = 0;
-    store.forEach(function (a) { if (a.cover && !a.deleted) full += a.cover.size || 0; });
-    var est = '';
-    try { if (navigator.storage && navigator.storage.estimate) { var e = await navigator.storage.estimate(); est = 'Spazio totale usato dall’app: ' + fmtB(e.usage || 0) + (e.quota ? ' su ' + fmtB(e.quota) + ' disponibili' : '') + '.'; } } catch (e2) {}
-    box.textContent = '';
-    box.append(h('p', { class: 'hint', text: 'Miniature sul dispositivo: ' + n + ' di ' + want + ' · ' + fmtB(tot) + (filling ? ' (in corso…)' : '') }),
-      h('p', { class: 'hint', text: 'Copertine originali salvate qui: ' + fmtB(full) + '. ' + est }),
-      h('div', { class: 'actions cols' },
-        h('button', { type: 'button', class: 'btn', text: 'Aggiorna miniature', onclick: function () { sweepDone = false; thumbSweep(); thumbFill(); setTimeout(updateCacheInfo, 400); } }),
-        h('button', { type: 'button', class: 'btn', text: 'Svuota miniature', onclick: function () {
-          Array.from(tmap.keys()).forEach(delThumb); noThumb.clear(); updateCacheInfo(); setTimeout(thumbFill, 200);
-        } })));
   }
   function startSync() {
     if (syncOn || !ready()) return;
@@ -928,10 +762,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     }
     a.coverId = path; a.coverDirty = false;
     await putRec(a);
-    try {
-      var tb = await makeThumb(a.cover);
-      if (tb) { var tr = await sb.storage.from('covers').upload(thumbPath(path), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true }); if (!tr.error) noThumb.delete(path); saveThumb(path, tb); }
-    } catch (e) { /* la sistemerà il controllo miniature */ }
     return 'ok';
   }
   async function pushRows(batch) {
@@ -942,7 +772,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     batch.forEach(function (a, i) {
       if (a.updated === stamps[i]) {
         a.dirty = false;
-        (a.trash || []).forEach(function (p) { if (p.indexOf('/') > 0) { gone.push(p); gone.push(thumbPath(p)); delThumb(p); } });
+        (a.trash || []).forEach(function (p) { if (p.indexOf('/') > 0) gone.push(p); });
         a.trash = [];
       } else flushAgain = true;
     });
@@ -999,7 +829,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     else if (!session || noSync) { txt = navigator.onLine === false ? 'offline · solo su questo dispositivo' : 'non connesso'; cls = 'warn'; }
     else if (n > 0) { txt = (navigator.onLine === false ? 'in attesa di rete · ' : '') + n + ' da sincronizzare'; cls = 'warn'; }
     else if (syncErr) { txt = syncErr; cls = 'bad'; }
-    else if (sweepMsg || fillMsg) { txt = sweepMsg || fillMsg; cls = ''; }
     else { txt = 'sincronizzato'; cls = 'ok'; }
     el.textContent = txt;
     el.className = 'sync ' + cls;
@@ -1132,7 +961,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
-    if (u) { var img = h('img', { alt: '', loading: 'lazy', decoding: 'async' }); putImg(img, a, function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }); cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
+    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }; cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
     return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; layerOpen('ser', closeSer); } },
       cv, h('span', { class: 'nm', text: arr[0].collana }), h('span', { class: 'ct', text: arr.length + (arr.length === 1 ? ' albo' : ' albi') }));
   }
@@ -1151,7 +980,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function gcover(a) {
     var u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
-    if (u) { var img = h('img', { alt: '', loading: 'lazy', decoding: 'async' }); putImg(img, a, function () { img.remove(); }); d.append(img); }
+    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
     return d;
   }
   function rowEl(a, showCollana, selectable) {
@@ -1187,7 +1016,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function boxCover(arr) {
     var a = arr.find(function (x) { return coverSrc(x); }), u = a && coverSrc(a), d = h('span', { class: 'bcov', 'aria-hidden': 'true' });
-    if (u) { var img = h('img', { alt: '', loading: 'lazy', decoding: 'async' }); putImg(img, a, function () { img.remove(); }); d.append(img); }
+    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
     return d;
   }
   /* una serie con i suoi numeri (elenco, oppure dentro a un box) */
@@ -1997,12 +1826,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
         if (!a.trash) a.trash = [];
         store.set(a.id, a);
       });
-      try {
-        var trs = await tx('thumbs', 'readonly', function (s) { return s.getAll(); }) || [];
-        trs.forEach(function (r) { if (r && r.b) tmap.set(r.k, r.b); });
-      } catch (e) { /* senza miniature locali si usa la rete */ }
       var m = await tx('meta', 'readonly', function (s) { return s.get('box'); });
       if (m && m.v) $('#f-box').value = cleanBox(m.v);
+      try { if (idb.objectStoreNames.contains('thumbs')) { var tt = idb.transaction('thumbs', 'readwrite'); tt.objectStore('thumbs').clear(); } } catch (e) { /* pulizia delle miniature locali */ }
       try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* facoltativo */ }
     } catch (e) {
       mem = true;
@@ -2011,10 +1837,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       b.hidden = false;
     }
     renderAll();
-    var sy = $('#sync');
-    sy.style.cursor = 'pointer';
-    sy.addEventListener('click', function () { var b = $('#cachepanel'); b.hidden = !b.hidden; updateCacheInfo(); });
-    setTimeout(thumbFill, 2500);
     connect();
     handleShared();
   })();
