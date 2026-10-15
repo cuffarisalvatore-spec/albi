@@ -623,13 +623,25 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return a.coverId ? CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + a.coverId : null;
   }
   function dropUrl(id) { var c = urlCache.get(id); if (c) { URL.revokeObjectURL(c.url); urlCache.delete(id); } }
+  /* copertina in miniatura: se il caricamento fallisce (rete o server momentaneamente non disponibili)
+     riprova da sola dopo qualche secondo, e solo dopo l'ultimo tentativo mostra il segnaposto */
+  var RETRY_MS = [3000, 12000, 45000];
+  function coverImg(u, onFail) {
+    var img = h('img', { src: u, alt: '', loading: 'lazy' }), tries = 0;
+    img.onerror = function () {
+      if (/^blob:/.test(u) || tries >= RETRY_MS.length) { img.remove(); if (onFail) onFail(); return; }
+      var wait = RETRY_MS[tries++];
+      setTimeout(function () {
+        if (!img.isConnected) return;
+        img.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + 'r=' + tries;
+      }, wait);
+    };
+    return img;
+  }
   function thumb(a) {
     var d = h('div', { class: 'thumb' }), u = a ? coverSrc(a) : null;
-    if (u) {
-      var img = h('img', { src: u, alt: '', loading: 'lazy' });
-      img.onerror = function () { img.remove(); d.textContent = '—'; };
-      d.append(img);
-    } else d.textContent = '—';
+    if (u) d.append(coverImg(u, function () { d.textContent = '—'; }));
+    else d.textContent = '—';
     return d;
   }
   async function shrink(file) {
@@ -674,6 +686,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     a.updated = Math.max(Date.now(), (a.updated || 0) + 1);
     a.dirty = true;
     putRec(a);
+    scheduleRender();
+    flush();
+  }
+  /* come touch, ma per tanti albi insieme: un solo salvataggio, un solo ridisegno, un solo invio */
+  function touchMany(arr) {
+    if (!arr.length) return;
+    var now = Date.now();
+    arr.forEach(function (a) { a.updated = Math.max(now, (a.updated || 0) + 1); a.dirty = true; });
+    putMany(arr);
     scheduleRender();
     flush();
   }
@@ -961,7 +982,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }; cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
+    if (u) cv.append(coverImg(u, function () { cv.append(h('span', { text: arr[0].collana })); })); else cv.append(h('span', { text: arr[0].collana }));
     return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; layerOpen('ser', closeSer); } },
       cv, h('span', { class: 'nm', text: arr[0].collana }), h('span', { class: 'ct', text: arr.length + (arr.length === 1 ? ' albo' : ' albi') }));
   }
@@ -980,7 +1001,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function gcover(a) {
     var u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
+    if (u) d.append(coverImg(u));
     return d;
   }
   function rowEl(a, showCollana, selectable) {
@@ -1016,7 +1037,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function boxCover(arr) {
     var a = arr.find(function (x) { return coverSrc(x); }), u = a && coverSrc(a), d = h('span', { class: 'bcov', 'aria-hidden': 'true' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
+    if (u) d.append(coverImg(u));
     return d;
   }
   /* una serie con i suoi numeri (elenco, oppure dentro a un box) */
@@ -1196,7 +1217,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     clearTimeout(delTimer);
     delArmedN = 0;
     var prev = recs.map(function (a) { return { a: a, cover: a.cover, coverId: a.coverId }; });
-    recs.forEach(function (a) { a.deleted = true; dropUrl(a.id); touch(a); });
+    recs.forEach(function (a) { a.deleted = true; dropUrl(a.id); });
+    touchMany(recs);
     picked.clear();
     var undone = false;
     setTimeout(function () {
@@ -1204,12 +1226,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       prev.forEach(function (p) {
         if (p.coverId) p.a.trash = (p.a.trash || []).concat([p.coverId]);
         p.a.cover = null; p.a.coverId = null; p.a.coverState = p.a.coverState === 'none' ? 'none' : 'missing';
-        touch(p.a);
       });
+      touchMany(prev.map(function (p) { return p.a; }));
     }, 6500);
     toast(recs.length + (recs.length === 1 ? ' albo eliminato' : ' albi eliminati'), function () {
       undone = true;
-      prev.forEach(function (p) { p.a.deleted = false; touch(p.a); });
+      prev.forEach(function (p) { p.a.deleted = false; });
+      touchMany(prev.map(function (p) { return p.a; }));
     });
     updateBar();
   }
@@ -1218,9 +1241,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     picked.forEach(function (id) { var a = store.get(id); if (a && !a.deleted && (a.box || '') !== bx) recs.push(a); });
     if (!recs.length) { toast(bx ? 'Sono già tutti nel box ' + bx : 'Nessuno ha un box da togliere'); return; }
     var prev = recs.map(function (a) { return [a, a.box]; });
-    recs.forEach(function (a) { a.box = bx; touch(a); });
+    recs.forEach(function (a) { a.box = bx; });
+    touchMany(recs);
     picked.clear();
-    toast(recs.length + (recs.length === 1 ? ' albo → ' : ' albi → ') + (bx ? 'box ' + bx : 'senza box'), function () { prev.forEach(function (p) { p[0].box = p[1]; touch(p[0]); }); });
+    toast(recs.length + (recs.length === 1 ? ' albo → ' : ' albi → ') + (bx ? 'box ' + bx : 'senza box'), function () { prev.forEach(function (p) { p[0].box = p[1]; }); touchMany(recs); });
     updateBar();
   }
   function closeLightbox() { $('#lightbox').hidden = true; layerShut('lb'); }
