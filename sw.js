@@ -2,8 +2,7 @@
    Cambia VERSION quando pubblichi una nuova versione dei file. */
 var VERSION = 'v32';
 var SHELL = 'albi-shell-' + VERSION;
-/* v3: svuota le copertine salvate dalle versioni precedenti, che potevano contenere risposte d'errore */
-var RUNTIME = 'albi-runtime-v3';
+var RUNTIME = 'albi-runtime-v2';
 var FILES = ['./', 'index.html', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
@@ -16,35 +15,14 @@ self.addEventListener('activate', function (e) {
   }).then(function () { return self.clients.claim(); }));
 });
 
-/* dalla cache, aggiornati in sottofondo; si salvano solo risposte andate a buon fine
-   (per i caratteri Google anche quelle «opache», che non si possono controllare) */
-function swr(req, cacheName, allowOpaque) {
+function swr(req, cacheName) {
   return caches.open(cacheName).then(function (cache) {
     return cache.match(req, { ignoreSearch: true }).then(function (hit) {
       var net = fetch(req).then(function (res) {
-        if (res && (res.ok || (allowOpaque && res.type === 'opaque'))) cache.put(req, res.clone()).catch(function () {});
+        if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
         return res;
       }).catch(function () { return hit; });
       return hit || net;
-    });
-  });
-}
-
-/* copertine: ogni file su Supabase ha un nome unico e non cambia mai, quindi se è già in cache
-   non serve richiederlo di nuovo. Si scarica in modalità CORS per sapere se la risposta è buona,
-   e si salva solo se lo è: un errore temporaneo del server non sostituisce più una copertina buona. */
-function coverFirst(req, url) {
-  var key = url.origin + url.pathname;
-  return caches.open(RUNTIME).then(function (cache) {
-    return cache.match(key).then(function (hit) {
-      if (hit) return hit;
-      return fetch(key, { mode: 'cors', credentials: 'omit' }).then(function (res) {
-        if (res && res.ok) cache.put(key, res.clone()).catch(function () {});
-        return res;
-      }, function () {
-        /* CORS non disponibile o rete assente: si prova la richiesta normale, senza salvarla */
-        return fetch(req);
-      });
     });
   });
 }
@@ -77,13 +55,8 @@ self.addEventListener('fetch', function (e) {
       : swr(req, SHELL));
     return;
   }
-  // copertine su Supabase: dalla cache se ci sono, altrimenti dalla rete
-  if (url.pathname.indexOf('/storage/v1/object/public/covers/') >= 0) {
-    e.respondWith(coverFirst(req, url));
-    return;
-  }
-  // caratteri Google: dalla cache, aggiornati in sottofondo
-  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
-    e.respondWith(swr(req, RUNTIME, true));
+  // copertine su Supabase e caratteri Google: dalla cache, aggiornate in sottofondo
+  if (url.pathname.indexOf('/storage/v1/object/public/covers/') >= 0 || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+    e.respondWith(swr(req, RUNTIME));
   }
 });
