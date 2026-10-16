@@ -382,6 +382,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   <div class="r"><input id="sel-box" autocomplete="off" list="dl-box" placeholder="Sposta nel box n° …" aria-label="Box di destinazione">
     <button type="button" class="btn primary small" id="sel-move">Sposta</button>
     <button type="button" class="btn small" id="sel-clear">Togli box</button></div>
+  <div class="r"><input id="sel-ed" autocomplete="off" list="dl-ed" placeholder="Assegna editore …" aria-label="Editore da assegnare">
+    <button type="button" class="btn primary small" id="sel-ed-go">Assegna</button></div>
   <div class="r"><button type="button" class="btn small danger" id="sel-del" style="width:100%">Elimina</button></div>
 </div>
 <div id="lightbox" class="lightbox" hidden></div>
@@ -1423,6 +1425,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     $('#sel-n').textContent = n + (n === 1 ? ' selezionato' : ' selezionati');
     $('#sel-move').disabled = !n || !cleanBox($('#sel-box').value);
     $('#sel-clear').disabled = !n;
+    $('#sel-ed-go').disabled = !n || !norm($('#sel-ed').value);
     var d = $('#sel-del');
     d.disabled = !n;
     if (!n || !delArmedN || delArmedN !== n) { delArmedN = 0; d.classList.remove('armed'); d.textContent = 'Elimina'; }
@@ -1469,6 +1472,18 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     recs.forEach(function (a) { a.box = bx; touch(a); });
     picked.clear();
     toast(recs.length + (recs.length === 1 ? ' albo → ' : ' albi → ') + (bx ? 'box ' + bx : 'senza box'), function () { prev.forEach(function (p) { p[0].box = p[1]; touch(p[0]); }); });
+    updateBar();
+  }
+  function setEdSel(ed) {
+    ed = norm(ed);
+    var recs = [];
+    picked.forEach(function (id) { var a = store.get(id); if (a && !a.deleted && norm(a.editore) !== ed) recs.push(a); });
+    if (!recs.length) { toast('Hanno già tutti questo editore'); return; }
+    var prev = recs.map(function (a) { return [a, a.editore]; });
+    recs.forEach(function (a) { a.editore = ed; touch(a); });
+    picked.clear();
+    $('#sel-ed').value = '';
+    toast(recs.length + (recs.length === 1 ? ' albo → ' : ' albi → ') + ed, function () { prev.forEach(function (p) { p[0].editore = p[1]; touch(p[0]); }); });
     updateBar();
   }
   function closeLightbox() { $('#lightbox').hidden = true; layerShut('lb'); }
@@ -1914,7 +1929,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     c.btn.setAttribute('aria-expanded', 'true');
     openCombo = { pop: pop, btn: c.btn };
   }
-  [['#f-collana', 'col'], ['#f-ed', 'ed'], ['#f-box', 'box'], ['#s-collana', 'col'], ['#s-ed', 'ed'], ['#s-box', 'box'], ['#sel-box', 'box', 'up']].forEach(function (d) {
+  [['#f-collana', 'col'], ['#f-ed', 'ed'], ['#f-box', 'box'], ['#s-collana', 'col'], ['#s-ed', 'ed'], ['#s-box', 'box'], ['#sel-box', 'box', 'up'], ['#sel-ed', 'ed', 'up']].forEach(function (d) {
     var input = $(d[0]);
     if (!input) return;
     input.removeAttribute('list');
@@ -1985,6 +2000,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#sel-all').addEventListener('click', function () { lastVisible.forEach(function (a) { picked.add(a.id); }); renderList(); });
   $('#sel-none').addEventListener('click', function () { picked.clear(); renderList(); });
   $('#sel-box').addEventListener('input', updateBar);
+  $('#sel-ed').addEventListener('input', updateBar);
+  $('#sel-ed-go').addEventListener('click', function () { setEdSel($('#sel-ed').value); });
   $('#sel-move').addEventListener('click', function () { var bx = cleanBox($('#sel-box').value); if (bx) moveSel(bx); });
   $('#sel-clear').addEventListener('click', function () { moveSel(''); });
   $('#sel-del').addEventListener('click', deleteSel);
