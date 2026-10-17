@@ -1,8 +1,8 @@
 /* Service worker di inBOX: apre l'app anche senza rete.
    Cambia VERSION quando pubblichi una nuova versione dei file. */
-var VERSION = 'v36';
+var VERSION = 'v37';
 var SHELL = 'albi-shell-' + VERSION;
-var RUNTIME = 'albi-runtime-v2';
+var RUNTIME = 'albi-runtime-v3';
 var FILES = ['./', 'index.html', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
@@ -56,7 +56,20 @@ self.addEventListener('fetch', function (e) {
     return;
   }
   // copertine su Supabase e caratteri Google: dalla cache, aggiornate in sottofondo
-  if (url.pathname.indexOf('/storage/v1/object/public/covers/') >= 0 || url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
+  // le copertine non cambiano mai (ogni caricamento ha un nome nuovo): una volta in cache si servono subito, senza riscaricarle
+  if (url.pathname.indexOf('/storage/v1/object/public/covers/') >= 0) {
+    e.respondWith(caches.open(RUNTIME).then(function (cache) {
+      return cache.match(req, { ignoreSearch: true }).then(function (hit) {
+        if (hit && hit.type !== 'opaque') return hit;
+        return fetch(req).then(function (res) {
+          if (res && res.ok && res.type !== 'opaque') cache.put(req, res.clone()).catch(function () {});
+          return res;
+        }).catch(function () { return hit || Response.error(); });
+      });
+    }));
+    return;
+  }
+  if (url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com') {
     e.respondWith(swr(req, RUNTIME));
   }
 });

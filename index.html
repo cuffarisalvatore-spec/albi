@@ -157,7 +157,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}}
 :root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
-#btn-import,#btn-covs,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
+#btn-import,#btn-covs,#btn-warm,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
 #btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
 .vbtns{display:flex;flex:none;white-space:nowrap}
 .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
@@ -320,6 +320,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="actions cols">
       <button type="button" class="btn" id="btn-import">Importa da ComicsBox</button>
       <button type="button" class="btn" id="btn-covs">Importa copertine</button>
+      <button type="button" class="btn" id="btn-warm">Scarica copertine sul telefono</button>
       <button type="button" class="btn" id="btn-export">Esporta CSV</button>
     </div>
     <div class="actions cols">
@@ -659,12 +660,23 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     }
     return a.coverId ? CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + a.coverId : null;
   }
+  // immagine di copertina: le copertine remote si chiedono in modalità CORS, così il telefono le tiene in cache con il loro peso reale
+  function covImg(u, onFail, alt) {
+    var img = h('img', { alt: alt || '', loading: 'lazy', decoding: 'async' }), retried = false;
+    var remote = /^https?:/i.test(u);
+    if (remote) img.crossOrigin = 'anonymous';
+    img.onerror = function () {
+      if (remote && !retried) { retried = true; img.removeAttribute('crossorigin'); img.src = u; return; }
+      if (onFail) onFail();
+    };
+    img.src = u;
+    return img;
+  }
   function dropUrl(id) { var c = urlCache.get(id); if (c) { URL.revokeObjectURL(c.url); urlCache.delete(id); } }
   function thumb(a) {
     var d = h('div', { class: 'thumb' }), u = a ? coverSrc(a) : null;
     if (u) {
-      var img = h('img', { src: u, alt: '', loading: 'lazy' });
-      img.onerror = function () { img.remove(); d.textContent = '—'; };
+      var img = covImg(u, function () { img.remove(); d.textContent = '—'; });
       d.append(img);
     } else d.textContent = '—';
     return d;
@@ -1133,7 +1145,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }; cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
+    if (u) { var img = covImg(u, function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }); cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
     return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; layerOpen('ser', closeSer); } },
       cv, h('span', { class: 'nm', text: arr[0].collana }), h('span', { class: 'ct', text: arr.length + (arr.length === 1 ? ' albo' : ' albi') }));
   }
@@ -1153,7 +1165,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   try { var sv0 = localStorage.getItem('aib-serview'); if (sv0 === 'list' || sv0 === 'grid') serView = sv0; } catch (e) {}
   function serTile(a) {
     var u = coverSrc(a), cv = h('span', { class: 'scv' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); cv.append(h('span', { text: '—' })); }; cv.append(img); }
+    if (u) { var img = covImg(u, function () { img.remove(); cv.append(h('span', { text: '—' })); }); cv.append(img); }
     else cv.append(h('span', { text: '—' }));
     var num = !a.numero ? 'unico' : isNum(a.numero) ? '#' + a.numero : a.numero;
     return h('button', { type: 'button', class: 'stile', 'aria-label': a.collana + ' ' + numLabel(a.numero) + (a.box ? ', ' + boxLabel(a.box) : ', senza box'), onclick: function () { openSheet(a.id); } },
@@ -1230,7 +1242,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function gcover(a) {
     var u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
+    if (u) { var img = covImg(u, function () { img.remove(); }); d.append(img); }
     return d;
   }
   function rowEl(a, showCollana, selectable) {
@@ -1266,7 +1278,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function boxCover(arr) {
     var a = arr.find(function (x) { return coverSrc(x); }), u = a && coverSrc(a), d = h('span', { class: 'bcov', 'aria-hidden': 'true' });
-    if (u) { var img = h('img', { src: u, alt: '', loading: 'lazy' }); img.onerror = function () { img.remove(); }; d.append(img); }
+    if (u) { var img = covImg(u, function () { img.remove(); }); d.append(img); }
     return d;
   }
   /* una serie con i suoi numeri (elenco, oppure dentro a un box) */
@@ -1492,7 +1504,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (!u) return;
     var lb = $('#lightbox');
     lb.textContent = '';
-    lb.append(h('img', { src: u, alt: 'Copertina ingrandita' }));
+    lb.append(covImg(u, null, 'Copertina ingrandita'));
     lb.hidden = false; layerOpen('lb', closeLightbox);
   }
 
@@ -1537,7 +1549,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var a = store.get(editId), t = $('#s-thumb');
     t.textContent = '';
     var u = a && coverSrc(a);
-    if (u) t.append(h('img', { src: u, alt: 'Copertina' })); else t.textContent = 'Nessuna copertina';
+    if (u) t.append(covImg(u, null, 'Copertina')); else t.textContent = 'Nessuna copertina';
     $('#s-nocov').hidden = !(a && (a.cover || a.coverId));
   }
   function openSheet(id) {
@@ -1773,6 +1785,36 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     await putMany(changed);
     closeImport(); renderAll(); flush();
     toast('Importati ' + cl.nuovi.length + ' albi' + (upd ? ', aggiornati ' + upd : ''));
+  }
+
+  /* ---------- copertine tenute sul dispositivo ---------- */
+  var warming = false;
+  async function warmCovers() {
+    if (warming) return;
+    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) { toast('Chiudi e riapri l\u2019app, poi riprova'); return; }
+    var urls = [];
+    listAll().forEach(function (a) { if (!a.cover && a.coverId) urls.push(CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + a.coverId); });
+    if (!urls.length) { toast('Non ci sono copertine da scaricare'); return; }
+    warming = true;
+    var btn = $('#btn-warm'), label = btn.textContent, done = 0, fail = 0, idx = 0, stop = false;
+    btn.disabled = true;
+    var worker = async function () {
+      while (!stop) {
+        var u = urls[idx++];
+        if (!u) return;
+        try {
+          var r = await fetch(u, { mode: 'cors' });
+          if (!r.ok) throw new Error('http');
+          await r.blob();
+          fail = 0;
+        } catch (e) { if (++fail >= 5) stop = true; }
+        done++;
+        btn.textContent = 'Scarico ' + done + ' di ' + urls.length + '…';
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    warming = false; btn.disabled = false; btn.textContent = label;
+    toast(stop ? 'Interrotto: controlla la connessione e riprova' : 'Copertine pronte sul telefono (' + urls.length + ')');
   }
 
   /* ---------- copertine in blocco ---------- */
@@ -2013,6 +2055,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#fcov').addEventListener('change', function () { closedF.clear(); renderList(); });
   $('#btn-export').addEventListener('click', exportCsv);
   $('#btn-import').addEventListener('click', openImport);
+  $('#btn-warm').addEventListener('click', warmCovers);
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
   $('#in-covs').addEventListener('change', function () { var arr = Array.prototype.slice.call($('#in-covs').files || []); $('#in-covs').value = ''; if (arr.length) bulkCovers(arr); });
   $('#csvcopy').addEventListener('click', copyCsv);
