@@ -157,7 +157,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}}
 :root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
-#btn-import,#btn-covs,#btn-warm,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
+#btn-import,#btn-covs,#btn-warm,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
 #btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
 .vbtns{display:flex;flex:none;white-space:nowrap}
 /* le serie lunghe: il telefono disegna solo le tessere e le righe che si vedono (o quasi) */
@@ -324,6 +324,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-import">Importa da ComicsBox</button>
       <button type="button" class="btn" id="btn-covs">Importa copertine</button>
       <button type="button" class="btn" id="btn-warm">Scarica copertine sul telefono</button>
+      <button type="button" class="btn" id="btn-slim">Riduci le copertine salvate</button>
       <button type="button" class="btn" id="btn-export">Esporta CSV</button>
     </div>
     <div class="actions cols">
@@ -332,7 +333,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v39</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v40</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -685,17 +686,18 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     } else d.textContent = '—';
     return d;
   }
+  var COV_MAX = 700, COV_Q = 0.75, COV_KEEP = 110 * 1024; // lato massimo, qualità e peso sotto cui non si tocca
   async function shrink(file) {
     try {
       var bmp = await createImageBitmap(file);
-      var sc = Math.min(1, 900 / Math.max(bmp.width, bmp.height));
-      if (sc === 1 && file.size <= 250 * 1024 && /^image\/(jpeg|png|webp)$/.test(file.type)) { if (bmp.close) bmp.close(); return file; }
+      var sc = Math.min(1, COV_MAX / Math.max(bmp.width, bmp.height));
+      if (sc === 1 && file.size <= COV_KEEP && /^image\/(jpeg|png|webp)$/.test(file.type)) { if (bmp.close) bmp.close(); return file; }
       var w = Math.round(bmp.width * sc), hh = Math.round(bmp.height * sc);
       var c = document.createElement('canvas');
       c.width = w; c.height = hh;
       c.getContext('2d').drawImage(bmp, 0, 0, w, hh);
       if (bmp.close) bmp.close();
-      var blob = await new Promise(function (r) { c.toBlob(r, 'image/jpeg', 0.8); });
+      var blob = await new Promise(function (r) { c.toBlob(r, 'image/jpeg', COV_Q); });
       return blob || file;
     } catch (e) { return file; }
   }
@@ -1791,6 +1793,63 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     toast('Importati ' + cl.nuovi.length + ' albi' + (upd ? ', aggiornati ' + upd : ''));
   }
 
+  /* ---------- riduzione delle copertine già salvate (libera spazio su Supabase) ---------- */
+  var slimming = false, slimStop = false, slimArmed = false, slimTimer;
+  async function slimCovers() {
+    var btn = $('#btn-slim');
+    if (slimming) { slimStop = true; btn.textContent = 'Mi fermo…'; return; }
+    if (!ready()) { toast('Serve essere connessi e collegati per sincronizzare'); return; }
+    var todo = [], myPref = session.user.id + '/';
+    listAll().forEach(function (a) { if (a.coverId && a.coverId.indexOf(myPref) === 0 && !a.coverDirty) todo.push(a); });
+    if (!todo.length) { toast('Non ci sono copertine da ridurre'); return; }
+    if (!slimArmed) {
+      slimArmed = true;
+      btn.textContent = 'Confermi? Si sostituiscono ' + todo.length + ' copertine';
+      clearTimeout(slimTimer);
+      slimTimer = setTimeout(function () { slimArmed = false; btn.textContent = 'Riduci le copertine salvate'; }, 6000);
+      return;
+    }
+    clearTimeout(slimTimer); slimArmed = false;
+    slimming = true; slimStop = false;
+    var done = 0, ok = 0, kept = 0, fail = 0, before = 0, after = 0, batch = [], idx = 0;
+    var base = CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/';
+    var shown = function () { btn.textContent = 'Riduco ' + done + ' di ' + todo.length + ' · toccami per fermare'; };
+    shown();
+    var worker = async function () {
+      while (!slimStop) {
+        var a = todo[idx++];
+        if (!a) return;
+        try {
+          if (a.coverDirty || !a.coverId) { done++; continue; }
+          var src = a.cover;
+          if (!src) { var r = await fetch(base + a.coverId, { mode: 'cors' }); if (!r.ok) throw new Error('http'); src = await r.blob(); }
+          before += src.size;
+          if (src.size <= COV_KEEP) { kept++; after += src.size; }
+          else {
+            var nb = await shrink(src);
+            if (nb && nb !== src && nb.size < src.size * 0.85) {
+              a.trash = (a.trash || []).concat([a.coverId]);
+              a.cover = nb; a.coverId = null; a.coverDirty = true;
+              a.updated = Math.max(Date.now(), a.updated + 1); a.dirty = true;
+              dropUrl(a.id);
+              batch.push(a); ok++; after += nb.size;
+            } else { kept++; after += src.size; }
+          }
+        } catch (e) { fail++; }
+        done++;
+        if (batch.length >= 20) { var b1 = batch; batch = []; await putMany(b1); flush(); }
+        if (done % 5 === 0) shown();
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    if (batch.length) { await putMany(batch); batch = []; }
+    flush();
+    slimming = false; btn.textContent = 'Riduci le copertine salvate';
+    renderAll();
+    var mb = function (n) { return (n / 1048576).toFixed(0); };
+    toast((slimStop ? 'Interrotto. ' : '') + 'Ridotte ' + ok + ' copertine (' + mb(before) + ' → ' + mb(after) + ' MB sui file elaborati)' + (fail ? ' · ' + fail + ' non riuscite' : ''));
+  }
+
   /* ---------- copertine tenute sul dispositivo ---------- */
   var warming = false;
   async function warmCovers() {
@@ -2060,6 +2119,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-export').addEventListener('click', exportCsv);
   $('#btn-import').addEventListener('click', openImport);
   $('#btn-warm').addEventListener('click', warmCovers);
+  $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
   $('#in-covs').addEventListener('change', function () { var arr = Array.prototype.slice.call($('#in-covs').files || []); $('#in-covs').value = ''; if (arr.length) bulkCovers(arr); });
   $('#csvcopy').addEventListener('click', copyCsv);
