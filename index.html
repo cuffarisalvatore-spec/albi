@@ -356,7 +356,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v49</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v50</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -1911,20 +1911,44 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- importazione ---------- */
   var FIELDS = [['collana', 'Collana *'], ['numero', 'Numero *'], ['editore', 'Editore *'], ['anno', 'Anno o data'], ['titolo', 'Titolo albo'], ['url', 'Link'], ['box', 'Box']];
+  // albi inseriti a mano (senza link a ComicsBox) indicizzati per numero + nome base della serie
+  var impMerge = new Map(); // id del record ComicsBox -> true/false (unire o no un possibile doppione)
+  function edCompat(x, y) {
+    var a = plain(x), b = plain(y);
+    return !a || !b || a === b || a.indexOf(b) >= 0 || b.indexOf(a) >= 0;
+  }
   function classify(recs) {
-    var byKey = new Map();
-    store.forEach(function (a) { byKey.set(keyOf(a.collana, a.numero, a.editore), a); });
-    var out = { nuovi: [], esistenti: [] }, seen = new Set();
+    var byKey = new Map(), byUrl = new Map(), manual = new Map(), preso = new Set();
+    store.forEach(function (a) {
+      byKey.set(keyOf(a.collana, a.numero, a.editore), a);
+      if (a.url) byUrl.set(a.url, a);
+      else if (!a.deleted && (a.source || 'app') === 'app') {
+        var mk = normNum(a.numero) + '|' + baseKey(a.collana);
+        if (!manual.has(mk)) manual.set(mk, []);
+        manual.get(mk).push(a);
+      }
+    });
+    var out = { nuovi: [], esistenti: [], simili: [], uniti: 0 }, seen = new Set();
     recs.forEach(function (r) {
       var k = keyOf(r.collana, r.numero, r.editore), id = idFor(r.url, k);
       if (seen.has(id)) return;
       seen.add(id);
-      var ex = store.get(id) || byKey.get(k);
-      if (ex) out.esistenti.push({ r: r, ex: ex }); else out.nuovi.push({ r: r, id: id });
+      var ex = store.get(id) || byKey.get(k) || (r.url ? byUrl.get(r.url) : null), unisci = false;
+      if (!ex) {
+        // stesso numero e stessa serie (a meno di parentesi, Vol., "The") con editore compatibile: possibile doppione
+        var cand = (manual.get(normNum(r.numero) + '|' + baseKey(r.collana)) || []).filter(function (a) { return !preso.has(a.id) && edCompat(a.editore, r.editore); })[0];
+        if (cand) {
+          preso.add(cand.id);
+          var si = impMerge.get(id) !== false;
+          out.simili.push({ r: r, id: id, ex: cand, unisci: si });
+          if (si) { ex = cand; unisci = true; out.uniti++; }
+        }
+      }
+      if (ex) out.esistenti.push({ r: r, ex: ex, unisci: unisci }); else out.nuovi.push({ r: r, id: id });
     });
     return out;
   }
-  function openImport() { impParsed = null; $('#imp-title').textContent = 'Importa da ComicsBox'; renderImport(); $('#imp-bg').hidden = false; layerOpen('imp', closeImport); }
+  function openImport() { impParsed = null; impMerge = new Map(); $('#imp-title').textContent = 'Importa da ComicsBox'; renderImport(); $('#imp-bg').hidden = false; layerOpen('imp', closeImport); }
   function closeImport() { $('#imp-bg').hidden = true; layerShut('imp'); }
   async function onImportFile() {
     var f = $('#in-imp').files && $('#in-imp').files[0];
@@ -1933,7 +1957,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     try {
       var text = decodeBuf(await f.arrayBuffer());
       impParsed = /<table/i.test(text) ? parseTable(text) : parseCsv(text);
-      impMap = guessMap(impParsed.head);
+      impMap = guessMap(impParsed.head); impMerge = new Map();
       if (!impParsed.rows.length) impParsed = { error: 'Il file non contiene righe di dati.' };
     } catch (e) { impParsed = { error: 'Non riesco a leggere questo file.' }; }
     renderImport();
@@ -1967,8 +1991,20 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var built = buildRecords(impParsed, impMap), cl = classify(built.recs);
     var perSer = new Map();
     cl.nuovi.forEach(function (n) { perSer.set(n.r.collana, (perSer.get(n.r.collana) || 0) + 1); });
-    var lines = [h('strong', { text: cl.nuovi.length + ' nuovi' }), ' · ' + cl.esistenti.length + ' già presenti' + (built.invalid ? ' · ' + built.invalid + ' righe incomplete saltate' : '')];
+    var lines = [h('strong', { text: cl.nuovi.length + ' nuovi' }), ' · ' + cl.esistenti.length + ' già presenti' + (cl.uniti ? ' (di cui ' + cl.uniti + ' da unire)' : '') + (built.invalid ? ' · ' + built.invalid + ' righe incomplete saltate' : '')];
     s.append(h('p', { style: 'margin:0' }, lines[0], lines[1]));
+    if (cl.simili.length) {
+      var box = h('div', { class: 'stack', style: 'gap:6px' }, h('strong', { text: 'Possibili doppioni: ' + cl.simili.length }),
+        h('p', { class: 'hint', style: 'margin:0', text: 'Li hai già inseriti a mano e in ComicsBox hanno una scrittura un po\u2019 diversa. Lascia la spunta per unirli (resta il tuo albo, con il suo box e la sua copertina); toglila per tenerli separati.' }));
+      cl.simili.forEach(function (x) {
+        var cb = h('input', { type: 'checkbox' });
+        cb.checked = x.unisci;
+        cb.addEventListener('change', function () { impMerge.set(x.id, cb.checked); renderImpSummary(); });
+        box.append(h('label', { class: 'sim', style: 'display:flex;gap:8px;align-items:flex-start' }, cb,
+          h('span', null, h('b', { text: 'Tuo: ' }), x.ex.collana + ' ' + numLabel(x.ex.numero) + ' · ' + x.ex.editore, h('br'), h('b', { text: 'ComicsBox: ' }), x.r.collana + ' ' + numLabel(x.r.numero) + ' · ' + x.r.editore)));
+      });
+      s.append(box);
+    }
     if (perSer.size) {
       var tb = h('table', { class: 'tbl' });
       perSer.forEach(function (n, k) { tb.append(h('tr', null, h('td', { text: k }), h('td', { text: String(n) }))); });
