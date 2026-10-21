@@ -356,7 +356,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v45</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v48</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -1037,6 +1037,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (d.length === 13 && d[0] === '0') d = d.slice(1); // UPC-A letto come EAN-13
     return { main: d, addon: addon };
   }
+  function mainOf(code) { return String(code || '').split('+')[0]; }
+  function addonOf(code) { return String(code || '').split('+')[1] || ''; }
+  // cifre aggiuntive -> numero dell'albo (2 cifre: il numero; 5 cifre: tolta la prima, di solito prezzo/anno)
+  function addonNum(ad) { return ad.length === 2 ? +ad : ad.length === 5 ? +ad.slice(1) : NaN; }
   function eanOk(d) {
     if (d.length === 12) d = '0' + d;
     if (d.length !== 13 && d.length !== 8) return d.length >= 6;
@@ -1048,20 +1052,23 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var el = $('#scan-info');
     el.textContent = '';
     el.hidden = !pendingCode;
-    if (pendingCode) el.append('Codice letto: ' + pendingCode + ' · ', h('button', { type: 'button', class: 'btn text', text: 'togli', onclick: function () { clearPending(); } }));
+    if (pendingCode) el.append('Codice letto: ' + pendingCode.replace('+', ' + ') + ' · ', h('button', { type: 'button', class: 'btn text', text: 'togli', onclick: function () { clearPending(); } }));
   }
   function clearPending() { pendingCode = ''; showPending(); }
   function applyScan(raw) {
     var p = normCode(raw);
     if (!p.main || !eanOk(p.main)) { toast('Codice non valido, riprova'); return false; }
-    pendingCode = p.main; showPending();
-    var albs = listAll().filter(function (a) { return a.barcode === p.main; }).sort(function (x, y) { return y.updated - x.updated; });
+    pendingCode = p.main + (p.addon ? '+' + p.addon : ''); showPending();
+    var albs = listAll().filter(function (a) { return mainOf(a.barcode) === p.main; }).sort(function (x, y) { return y.updated - x.updated; });
     var isBook = /^97[89]/.test(p.main);
     if (albs.length) {
       var last = albs[0], num = '';
       if (isBook) num = last.numero;
-      else if (p.addon.length === 2 && isNum(p.addon)) num = String(+p.addon);
-      else {
+      else if (p.addon && !isNaN(addonNum(p.addon))) {
+        // il numero segue le cifre aggiuntive; lo scarto rispetto ai tuoi albi già registrati si impara da solo
+        var cal = albs.filter(function (a) { return addonOf(a.barcode) && isNum(a.numero) && !isNaN(addonNum(addonOf(a.barcode))); })[0];
+        num = String(Math.max(0, addonNum(p.addon) + (cal ? +cal.numero - addonNum(addonOf(cal.barcode)) : 0)));
+      } else {
         var mx = -1;
         albs.forEach(function (a) { if (a.collana === last.collana && isNum(a.numero)) mx = Math.max(mx, +a.numero); });
         num = mx >= 0 ? String(mx + 1) : '';
@@ -1072,10 +1079,42 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     } else {
       $('#f-collana').value = ''; $('#f-num').value = ''; $('#f-ed').value = '';
       showNew = false; renderMatches();
-      toast('Codice nuovo: scrivi la serie e il numero, la prossima volta la riconosco');
-      setTimeout(function () { $('#f-collana').focus(); }, 50);
+      toast('Cerco il codice su ComiXtime…');
+      lookupCode(p, pendingCode);
     }
     return true;
+  }
+  async function iscnCall(code) {
+    var r = await sb.functions.invoke('fumetti-cerca', { body: { iscn: code } });
+    var data = r.data;
+    if (r.error && r.error.context && r.error.context.json) { try { data = await r.error.context.json(); } catch (e) {} }
+    if (data && data.error) throw new Error(data.error);
+    if (r.error && !data) throw new Error('Il servizio di ricerca non risponde');
+    return data;
+  }
+  // codice sconosciuto: si cerca su ComiXtime (ISBN/ISCN) e si compila il modulo
+  async function lookupCode(p, mine) {
+    var manual = function (msg) { toast(msg); setTimeout(function () { $('#f-collana').focus(); }, 50); };
+    if (!sb || !session) { manual('Codice nuovo: scrivi la serie e il numero'); return; }
+    try {
+      var d = await iscnCall(p.main);
+      if ((!d || !d.trovato) && p.addon) d = await iscnCall(p.main + p.addon);
+      if (pendingCode !== mine) return; // nel frattempo hai scansionato altro
+      if (!d || !d.trovato || !d.serie) { manual('Codice non trovato su ComiXtime: scrivi serie e numero, la prossima volta lo riconosco'); return; }
+      var serie = resolveCollana(d.serie) || d.serie;
+      $('#f-collana').value = serie; $('#f-num').value = d.numero || '';
+      var pre = p.main.slice(0, 8), vic = /^97[89]/.test(p.main) ? listAll().filter(function (x) { return x.barcode && x.editore && x.barcode.indexOf(pre) === 0; }).sort(function (x, y) { return y.updated - x.updated; })[0] : null;
+      $('#f-ed').value = lastEditore(serie) || (vic ? vic.editore : '');
+      var yr = (d.uscita.match(/\b(19|20)\d{2}\b/) || [''])[0];
+      $('#f-anno').value = yr;
+      draft = { cover: null, state: 'missing', titolo: d.titolo || '' };
+      showNew = false; renderMatches(); renderDraft();
+      toast('Trovato: ' + serie + ' ' + (d.numero ? 'n. ' + d.numero : '') + (d.titolo ? ' · ' + d.titolo : ''));
+      if (showNew && !$('#f-ed').value) setTimeout(function () { $('#f-ed').focus(); }, 50);
+      if (showNew && d.copertina && !curMatches.length) {
+        try { await attachImage('draft', await webImage(d.copertina), 'found'); } catch (e) {}
+      }
+    } catch (e) { manual('Ricerca non riuscita (' + String(e.message || e) + '): scrivi serie e numero'); }
   }
   function stopScan() {
     clearTimeout(scanTimer); scanTimer = null;
