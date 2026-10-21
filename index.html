@@ -239,6 +239,21 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:grid;place-items:center;z-index:40;padding:12px;cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
 @media (prefers-reduced-motion:no-preference){.btn{transition:transform .08s}.btn:active{transform:scale(.98)}}
+@media screen{#print-area{display:none}}
+@media print{
+  body>*:not(#print-area){display:none!important}
+  html,body{background:#fff!important;color:#000!important}
+  #print-area{display:block;font:11pt/1.4 system-ui,sans-serif;color:#000}
+  .pbox{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .phead{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
+  .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:22pt;margin:0}
+  .plogo{display:flex;align-items:center;gap:2px;font-size:20pt;line-height:1;font-family:var(--font-display)}
+  .pin{font-weight:600;color:var(--accent)}
+  .pbx{font-weight:700;letter-spacing:.06em;background:var(--accent);color:var(--on-accent);padding:2px 7px 1px;border-radius:5px}
+  .pbody{border:1px solid #cfcfcf;border-radius:6px;padding:10px 14px}
+  .pbody p{margin:3px 0}
+  .pbody b{color:#8b1a1a;text-transform:uppercase}
+}
 </style>
 
 </head>
@@ -335,7 +350,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v42</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v43</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -1384,6 +1399,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
           var wrap = h('div', { class: 'group' }, head);
           if (bopen) {
             var inner = h('div', { class: 'list bxin' });
+            inner.append(h('button', { type: 'button', class: 'btn small', text: 'Stampa elenco riassuntivo', onclick: function () { printBox(b); } }));
             sg.forEach(function (arr, k) { inner.append(serieEl(arr, 's:' + b + '|' + k, filtering, false)); });
             wrap.append(inner);
           }
@@ -1884,6 +1900,64 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     toast((slimStop ? 'Interrotto. ' : '') + 'Ridotte ' + ok + ' copertine (' + mb(before) + ' → ' + mb(after) + ' MB sui file elaborati)' + (fail ? ' · ' + fail + ' non riuscite' : ''));
   }
 
+  /* ---------- stampa riepilogo dei box ---------- */
+  // numeri -> "dal 1 al 45" se è un solo blocco, altrimenti "1-45, 47, 50-60"; i numeri non numerici in coda
+  function rangeText(nums, extra, solo) {
+    var ns = Array.from(new Set(nums)).sort(function (x, y) { return x - y; }), parts = [], i = 0;
+    while (i < ns.length) {
+      var j = i;
+      while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1) j++;
+      parts.push(j > i ? [ns[i], ns[j]] : [ns[i]]);
+      i = j + 1;
+    }
+    var txt;
+    if (parts.length === 1 && parts[0].length === 2 && !extra.length) txt = 'dal ' + parts[0][0] + ' al ' + parts[0][1];
+    else {
+      var out = parts.map(function (q) { return q.length === 2 ? q[0] + '-' + q[1] : String(q[0]); });
+      txt = out.concat(extra).join(', ');
+    }
+    if (solo) txt = txt ? txt + ', volume unico' : '';
+    return txt;
+  }
+  function boxSummary(only) {
+    var boxes = new Map();
+    listAll().forEach(function (a) {
+      if (!a.box || (only != null && a.box !== only)) return;
+      if (!boxes.has(a.box)) boxes.set(a.box, new Map());
+      var m = boxes.get(a.box), k = a.collana.toLowerCase();
+      if (!m.has(k)) m.set(k, { nome: a.collana, nums: [], extra: [], solo: false, n: 0 });
+      var g = m.get(k); g.n++;
+      var nu = norm(a.numero || '');
+      if (!nu) g.solo = true; else if (isNum(nu)) g.nums.push(+nu); else if (g.extra.indexOf(nu) < 0) g.extra.push(nu);
+    });
+    return Array.from(boxes.keys()).sort(function (x, y) { return String(x).localeCompare(String(y), 'it', { numeric: true }); }).map(function (b) {
+      var m = boxes.get(b), tot = 0;
+      var righe = Array.from(m.values()).sort(function (x, y) { return x.nome.localeCompare(y.nome, 'it'); }).map(function (g) {
+        tot += g.n;
+        var t = rangeText(g.nums, g.extra, g.solo);
+        return { nome: g.nome, testo: t };
+      });
+      return { box: b, tot: tot, righe: righe };
+    });
+  }
+  function printBox(b) {
+    var data = boxSummary(b);
+    if (!data.length) { toast('Non ci sono albi nei box'); return; }
+    var pa = $('#print-area');
+    if (!pa) { pa = h('div', { id: 'print-area' }); document.body.append(pa); }
+    pa.textContent = '';
+    data.forEach(function (d) {
+      var body = h('div', { class: 'pbody' });
+      d.righe.forEach(function (r) { body.append(h('p', null, h('b', { text: r.nome }), r.testo ? ': ' + r.testo : '')); });
+      pa.append(h('section', { class: 'pbox' },
+        h('div', { class: 'phead' },
+          h('h2', { text: boxLabel(d.box) + ' · ' + d.tot + (d.tot === 1 ? ' albo' : ' albi') }),
+          h('span', { class: 'plogo', 'aria-hidden': 'true' }, h('span', { class: 'pin', text: 'in' }), h('span', { class: 'pbx', text: 'BOX' }))),
+        body));
+    });
+    setTimeout(function () { window.print(); }, 50);
+  }
+
   /* ---------- miniature per le copertine già salvate ---------- */
   var thumbing = false, thumbStop = false;
   async function makeThumbs() {
@@ -2269,6 +2343,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-fetch').addEventListener('click', fetchCovers);
   $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-thumbs').addEventListener('click', makeThumbs);
+
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
   $('#in-covs').addEventListener('change', function () { var arr = Array.prototype.slice.call($('#in-covs').files || []); $('#in-covs').value = ''; if (arr.length) bulkCovers(arr); });
   $('#csvcopy').addEventListener('click', copyCsv);
