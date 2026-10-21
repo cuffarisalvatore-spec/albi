@@ -157,7 +157,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}}
 :root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
-#btn-import,#btn-covs,#btn-fetch,#btn-warm,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
+#btn-import,#btn-covs,#btn-fetch,#btn-warm,#btn-thumbs,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
 #btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
 .vbtns{display:flex;flex:none;white-space:nowrap}
 /* le serie lunghe: il telefono disegna solo le tessere e le righe che si vedono (o quasi) */
@@ -325,6 +325,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-covs">Importa copertine</button>
       <button type="button" class="btn" id="btn-fetch" hidden>Scarica copertine mancanti</button>
       <button type="button" class="btn" id="btn-warm">Scarica copertine sul telefono</button>
+      <button type="button" class="btn" id="btn-thumbs">Crea le miniature</button>
       <button type="button" class="btn" id="btn-slim">Riduci le copertine salvate</button>
       <button type="button" class="btn" id="btn-export">Esporta CSV</button>
     </div>
@@ -334,7 +335,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v41</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v42</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -678,11 +679,38 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     img.src = u;
     return img;
   }
+  // miniature: accanto a ogni copertina sul server c'è <nome>_t.jpg (lato lungo 480 px, circa 25 KB)
+  var THUMB_MAX = 480, THUMB_Q = 0.7, noThumb = new Set();
+  function thumbPath(p) { return p.replace(/\.[a-z0-9]+$/i, '') + '_t.jpg'; }
+  async function makeThumb(blob) {
+    try {
+      var bmp = await createImageBitmap(blob);
+      var sc = Math.min(1, THUMB_MAX / Math.max(bmp.width, bmp.height));
+      var w = Math.max(1, Math.round(bmp.width * sc)), hh = Math.max(1, Math.round(bmp.height * sc));
+      var c = document.createElement('canvas');
+      c.width = w; c.height = hh;
+      c.getContext('2d').drawImage(bmp, 0, 0, w, hh);
+      if (bmp.close) bmp.close();
+      return await new Promise(function (r) { c.toBlob(r, 'image/jpeg', THUMB_Q); });
+    } catch (e) { return null; }
+  }
+  // immagine per elenchi e griglie: copia locale se c'è, altrimenti la miniatura, altrimenti la copertina intera
+  function covThumb(a, onFail) {
+    var full = coverSrc(a);
+    if (!full) return null;
+    if (a.cover || !a.coverId || noThumb.has(a.coverId)) return covImg(full, onFail);
+    var tu = CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + thumbPath(a.coverId), id = a.coverId;
+    var img = covImg(tu, function () {
+      noThumb.add(id);
+      var i2 = covImg(full, onFail);
+      if (img.parentNode) img.replaceWith(i2); else onFail && onFail();
+    });
+    return img;
+  }
   function dropUrl(id) { var c = urlCache.get(id); if (c) { URL.revokeObjectURL(c.url); urlCache.delete(id); } }
   function thumb(a) {
-    var d = h('div', { class: 'thumb' }), u = a ? coverSrc(a) : null;
-    if (u) {
-      var img = covImg(u, function () { img.remove(); d.textContent = '—'; });
+    var d = h('div', { class: 'thumb' }), img = a ? covThumb(a, function () { d.textContent = '—'; }) : null;
+    if (img) {
       d.append(img);
     } else d.textContent = '—';
     return d;
@@ -816,6 +844,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       syncErr = 'errore copertine';
       return 'skip';
     }
+    try {
+      var tb = await makeThumb(a.cover);
+      if (tb) await sb.storage.from('covers').upload(thumbPath(path), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
+    } catch (e) {}
     a.coverId = path; a.coverDirty = false;
     await putRec(a);
     return 'ok';
@@ -828,7 +860,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     batch.forEach(function (a, i) {
       if (a.updated === stamps[i]) {
         a.dirty = false;
-        (a.trash || []).forEach(function (p) { if (p.indexOf('/') > 0) gone.push(p); });
+        (a.trash || []).forEach(function (p) { if (p.indexOf('/') > 0) { gone.push(p); gone.push(thumbPath(p)); } });
         a.trash = [];
       } else flushAgain = true;
     });
@@ -1152,7 +1184,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function tileEl(arr) {
     var c = arr.filter(function (x) { return coverSrc(x); }), a = c.length ? c[c.length - 1] : null, u = a && coverSrc(a);
     var cv = h('div', { class: 'cv' });
-    if (u) { var img = covImg(u, function () { img.remove(); cv.append(h('span', { text: arr[0].collana })); }); cv.append(img); } else cv.append(h('span', { text: arr[0].collana }));
+    var img = a ? covThumb(a, function () { cv.textContent = ''; cv.append(h('span', { text: arr[0].collana })); }) : null;
+    if (img) cv.append(img); else cv.append(h('span', { text: arr[0].collana }));
     return h('button', { type: 'button', class: 'tile', onclick: function () { openSer = arr[0].collana.toLowerCase(); renderSer(); $('#ser-bg').hidden = false; layerOpen('ser', closeSer); } },
       cv, h('span', { class: 'nm', text: arr[0].collana }), h('span', { class: 'ct', text: arr.length + (arr.length === 1 ? ' albo' : ' albi') }));
   }
@@ -1171,9 +1204,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   var serView = 'grid';
   try { var sv0 = localStorage.getItem('aib-serview'); if (sv0 === 'list' || sv0 === 'grid') serView = sv0; } catch (e) {}
   function serTile(a) {
-    var u = coverSrc(a), cv = h('span', { class: 'scv' });
-    if (u) { var img = covImg(u, function () { img.remove(); cv.append(h('span', { text: '—' })); }); cv.append(img); }
-    else cv.append(h('span', { text: '—' }));
+    var cv = h('span', { class: 'scv' }), img = covThumb(a, function () { cv.textContent = ''; cv.append(h('span', { text: '—' })); });
+    if (img) cv.append(img); else cv.append(h('span', { text: '—' }));
     var num = !a.numero ? 'unico' : isNum(a.numero) ? '#' + a.numero : a.numero;
     return h('button', { type: 'button', class: 'stile', 'aria-label': a.collana + ' ' + numLabel(a.numero) + (a.box ? ', ' + boxLabel(a.box) : ', senza box'), onclick: function () { openSheet(a.id); } },
       cv, h('span', { class: 'sinfo' }, h('span', { class: 'snum', text: num }), a.anno ? h('span', { class: 'sanno', text: a.anno }) : null),
@@ -1248,8 +1280,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return h('span', { class: 'gcovs' }, gcover(c.length ? c[c.length - 1] : null));
   }
   function gcover(a) {
-    var u = a && coverSrc(a), d = h('span', { class: 'gcov', 'aria-hidden': 'true' });
-    if (u) { var img = covImg(u, function () { img.remove(); }); d.append(img); }
+    var d = h('span', { class: 'gcov', 'aria-hidden': 'true' }), img = a ? covThumb(a, function () { d.textContent = ''; }) : null;
+    if (img) d.append(img);
     return d;
   }
   function rowEl(a, showCollana, selectable) {
@@ -1284,8 +1316,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return m;
   }
   function boxCover(arr) {
-    var a = arr.find(function (x) { return coverSrc(x); }), u = a && coverSrc(a), d = h('span', { class: 'bcov', 'aria-hidden': 'true' });
-    if (u) { var img = covImg(u, function () { img.remove(); }); d.append(img); }
+    var a = arr.find(function (x) { return coverSrc(x); }), d = h('span', { class: 'bcov', 'aria-hidden': 'true' }), img = a ? covThumb(a, function () { d.textContent = ''; }) : null;
+    if (img) d.append(img);
     return d;
   }
   /* una serie con i suoi numeri (elenco, oppure dentro a un box) */
@@ -1852,6 +1884,52 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     toast((slimStop ? 'Interrotto. ' : '') + 'Ridotte ' + ok + ' copertine (' + mb(before) + ' → ' + mb(after) + ' MB sui file elaborati)' + (fail ? ' · ' + fail + ' non riuscite' : ''));
   }
 
+  /* ---------- miniature per le copertine già salvate ---------- */
+  var thumbing = false, thumbStop = false;
+  async function makeThumbs() {
+    var btn = $('#btn-thumbs');
+    if (thumbing) { thumbStop = true; btn.textContent = 'Mi fermo…'; return; }
+    if (!ready()) { toast('Serve essere connessi e collegati per sincronizzare'); return; }
+    var uidp = session.user.id, have = new Set(), off = 0;
+    thumbing = true; thumbStop = false;
+    btn.textContent = 'Controllo le miniature…';
+    try {
+      for (;;) {
+        var lr = await sb.storage.from('covers').list(uidp, { limit: 1000, offset: off });
+        if (lr.error) throw lr.error;
+        (lr.data || []).forEach(function (f) { have.add(uidp + '/' + f.name); });
+        if (!lr.data || lr.data.length < 1000) break;
+        off += 1000;
+      }
+    } catch (e) { thumbing = false; btn.textContent = 'Crea le miniature'; toast('Non riesco a leggere l\u2019elenco: riprova'); return; }
+    var todo = listAll().filter(function (a) { return a.coverId && a.coverId.indexOf(uidp + '/') === 0 && !a.coverDirty && !have.has(thumbPath(a.coverId)); });
+    if (!todo.length) { thumbing = false; btn.textContent = 'Crea le miniature'; toast('Le miniature ci sono già tutte'); return; }
+    var base = CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/', done = 0, ok = 0, fail = 0, idx = 0;
+    var shown = function () { btn.textContent = 'Creo ' + done + ' di ' + todo.length + ' · toccami per fermare'; };
+    shown();
+    var worker = async function () {
+      while (!thumbStop) {
+        var a = todo[idx++];
+        if (!a) return;
+        try {
+          var src = a.cover;
+          if (!src) { var r = await fetch(base + a.coverId, { mode: 'cors' }); if (!r.ok) throw new Error('http'); src = await r.blob(); }
+          var tb = await makeThumb(src);
+          if (!tb) throw new Error('thumb');
+          var up = await sb.storage.from('covers').upload(thumbPath(a.coverId), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
+          if (up.error) throw up.error;
+          noThumb.delete(a.coverId); ok++;
+        } catch (e) { fail++; }
+        done++;
+        if (done % 5 === 0) shown();
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    thumbing = false; btn.textContent = 'Crea le miniature';
+    renderAll();
+    toast((thumbStop ? 'Interrotto. ' : '') + 'Miniature create: ' + ok + (fail ? ' · ' + fail + ' non riuscite' : ''));
+  }
+
   /* ---------- copertine mancanti: si scaricano da ComicsBox attraverso la funzione su Supabase ---------- */
   var fetchingCov = false, fetchStop = false;
   function cbCode(a) { var m = /comicsbox\.it\/albo\/([A-Za-z0-9_.~:@+-]+)/.exec(a.url || ''); return m ? m[1] : ''; }
@@ -1923,7 +2001,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (warming) return;
     if (!navigator.serviceWorker || !navigator.serviceWorker.controller) { toast('Chiudi e riapri l\u2019app, poi riprova'); return; }
     var urls = [];
-    listAll().forEach(function (a) { if (!a.cover && a.coverId) urls.push(CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/' + a.coverId); });
+    var wbase = CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/';
+    listAll().forEach(function (a) { if (!a.cover && a.coverId) { urls.push(wbase + a.coverId); if (!noThumb.has(a.coverId)) urls.push(wbase + thumbPath(a.coverId)); } });
     if (!urls.length) { toast('Non ci sono copertine da scaricare'); return; }
     warming = true;
     var btn = $('#btn-warm'), label = btn.textContent, done = 0, fail = 0, idx = 0, stop = false;
@@ -1934,6 +2013,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
         if (!u) return;
         try {
           var r = await fetch(u, { mode: 'cors' });
+          if (r.status === 404 && /_t\.jpg$/.test(u)) { done++; continue; }
           if (!r.ok) throw new Error('http');
           await r.blob();
           fail = 0;
@@ -2188,6 +2268,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-warm').addEventListener('click', warmCovers);
   $('#btn-fetch').addEventListener('click', fetchCovers);
   $('#btn-slim').addEventListener('click', slimCovers);
+  $('#btn-thumbs').addEventListener('click', makeThumbs);
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
   $('#in-covs').addEventListener('change', function () { var arr = Array.prototype.slice.call($('#in-covs').files || []); $('#in-covs').value = ''; if (arr.length) bulkCovers(arr); });
   $('#csvcopy').addEventListener('click', copyCsv);
