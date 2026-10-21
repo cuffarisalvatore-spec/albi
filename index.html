@@ -157,7 +157,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}}
 :root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
-#btn-import,#btn-covs,#btn-fetch,#btn-warm,#btn-thumbs,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
+#btn-import,#btn-covs,#btn-fetch,#btn-scan,#btn-warm,#btn-thumbs,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
 #btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
 .vbtns{display:flex;flex:none;white-space:nowrap}
 /* le serie lunghe: il telefono disegna solo le tessere e le righe che si vedono (o quasi) */
@@ -239,6 +239,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:grid;place-items:center;z-index:40;padding:12px;cursor:zoom-out}
 .lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:4px}
 @media (prefers-reduced-motion:no-preference){.btn{transition:transform .08s}.btn:active{transform:scale(.98)}}
+.scanrow{display:grid;gap:4px;margin:0 0 10px}
+.scanvid{width:100%;aspect-ratio:4/3;object-fit:cover;background:#000;border-radius:10px}
 @media screen{#print-area{display:none}}
 @media print{
   body>*:not(#print-area){display:none!important}
@@ -270,6 +272,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <label for="f-box">Box in cui lo metto</label>
       <input id="f-box" autocomplete="off" placeholder="es. 12" list="dl-box">
       <p class="hint">Resta quello dell’ultimo albo finché non lo cambi. Puoi anche lasciarlo vuoto e metterlo dopo.</p>
+    </div>
+    <div class="scanrow">
+      <button type="button" class="btn" id="btn-scan">Scansiona codice a barre</button>
+      <p class="hint" id="scan-info" hidden></p>
     </div>
     <form id="form" class="stack" novalidate>
       <div class="field">
@@ -350,7 +356,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v43</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v45</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -425,6 +431,17 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
+<div id="scan-bg" class="sheet-bg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="scan-title">
+    <div class="labrow"><h2 id="scan-title">Scansiona il codice</h2><button type="button" class="btn text" id="scan-close">Chiudi</button></div>
+    <video id="scan-video" class="scanvid" playsinline muted></video>
+    <p class="hint" id="scan-hint">Inquadra il codice a barre dell’albo.</p>
+    <div class="numrow" style="grid-template-columns:1fr auto">
+      <input id="scan-manual" inputmode="numeric" autocomplete="off" placeholder="oppure scrivi le cifre">
+      <button type="button" class="btn" id="scan-use">Usa</button>
+    </div>
+  </div>
+</div>
 <div id="ser-bg" class="sheet-bg" hidden>
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="ser-title">
     <div class="labrow"><h2 id="ser-title"></h2><button type="button" class="btn text" id="ser-close">Chiudi</button></div>
@@ -761,12 +778,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function fromDoc(id, d) {
     return { id: id, collana: d.collana || '', numero: String(d.numero == null ? '' : d.numero), editore: d.editore || '', box: d.box || '',
       anno: d.anno || '', url: d.url || '', titolo: d.titolo || '', source: d.source || 'app', coverState: d.coverState || 'missing',
-      coverId: d.coverId || null, created: d.created || 0, updated: d.updated || 0, deleted: !!d.deleted,
+      coverId: d.coverId || null, barcode: d.barcode || '', created: d.created || 0, updated: d.updated || 0, deleted: !!d.deleted,
       cover: null, coverDirty: false, trash: [], dirty: false };
   }
   function toDoc(a) {
     return { collana: a.collana, numero: a.numero, editore: a.editore, box: a.box || '', anno: a.anno || '', url: a.url || '', titolo: a.titolo || '',
-      source: a.source || 'app', coverState: a.coverState || 'missing', coverId: a.coverId || null, created: a.created || 0,
+      source: a.source || 'app', coverState: a.coverState || 'missing', coverId: a.coverId || null, barcode: a.barcode || '', created: a.created || 0,
       updated: a.updated || 0, deleted: !!a.deleted };
   }
   function touch(a) {
@@ -788,12 +805,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function rowToDoc(r) {
     return { collana: r.collana, numero: r.numero, editore: r.editore, box: r.box, anno: r.anno, url: r.url, titolo: r.titolo, source: r.source,
-      coverState: r.cover_state, coverId: r.cover_path, created: Number(r.created) || 0, updated: Number(r.updated) || 0, deleted: !!r.deleted };
+      coverState: r.cover_state, coverId: r.cover_path, barcode: r.barcode || '', created: Number(r.created) || 0, updated: Number(r.updated) || 0, deleted: !!r.deleted };
   }
   function toRow(a) {
     var d = toDoc(a);
-    return { id: a.id, collana: d.collana, numero: d.numero, editore: d.editore, box: d.box, anno: d.anno, url: d.url, titolo: d.titolo, source: d.source,
+    var row = { id: a.id, collana: d.collana, numero: d.numero, editore: d.editore, box: d.box, anno: d.anno, url: d.url, titolo: d.titolo, source: d.source,
       cover_state: d.coverState, cover_path: d.coverId, created: d.created, updated: d.updated, deleted: d.deleted };
+    if (d.barcode) row.barcode = d.barcode; // la colonna serve solo a chi usa lo scanner
+    return row;
   }
   function applyRows(rows) {
     var changed = [];
@@ -861,7 +880,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     }
     try {
       var tb = await makeThumb(a.cover);
-      if (tb) await sb.storage.from('covers').upload(thumbPath(path), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
+      if (tb) await sb.storage.from('covers').upload(thumbPath(path), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
     } catch (e) {}
     a.coverId = path; a.coverDirty = false;
     await putRec(a);
@@ -997,14 +1016,103 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     }
   }
   function assignBox(a, bx) {
-    var prev = a.box, typedNum = $('#f-num').value;
+    var prev = a.box, typedNum = $('#f-num').value, prevCode = a.barcode;
     a.box = bx;
+    if (pendingCode && !a.barcode) a.barcode = pendingCode;
+    clearPending();
     touch(a);
     setMeta('box', bx);
     $('#f-num').value = nextAfter(typedNum);
     showNew = false;
     renderMatches();
-    toast(numLabel(a.numero) + ' · ' + a.collana + ' → box ' + bx, function () { a.box = prev; touch(a); $('#f-num').value = typedNum; renderMatches(); });
+    toast(numLabel(a.numero) + ' · ' + a.collana + ' → box ' + bx, function () { a.box = prev; a.barcode = prevCode; touch(a); $('#f-num').value = typedNum; renderMatches(); });
+  }
+
+  /* ---------- scanner dei codici a barre ---------- */
+  var pendingCode = '', scanStream = null, scanTimer = null, scanDet = null;
+  function normCode(raw) {
+    var d = String(raw || '').replace(/\D/g, ''), addon = '';
+    if (d.length === 15) { addon = d.slice(13); d = d.slice(0, 13); }
+    else if (d.length === 18) { addon = d.slice(13); d = d.slice(0, 13); }
+    if (d.length === 13 && d[0] === '0') d = d.slice(1); // UPC-A letto come EAN-13
+    return { main: d, addon: addon };
+  }
+  function eanOk(d) {
+    if (d.length === 12) d = '0' + d;
+    if (d.length !== 13 && d.length !== 8) return d.length >= 6;
+    var sum = 0;
+    for (var i = 0; i < d.length - 1; i++) sum += +d[i] * ((d.length - i) % 2 === 0 ? 3 : 1);
+    return (10 - sum % 10) % 10 === +d[d.length - 1];
+  }
+  function showPending() {
+    var el = $('#scan-info');
+    el.textContent = '';
+    el.hidden = !pendingCode;
+    if (pendingCode) el.append('Codice letto: ' + pendingCode + ' · ', h('button', { type: 'button', class: 'btn text', text: 'togli', onclick: function () { clearPending(); } }));
+  }
+  function clearPending() { pendingCode = ''; showPending(); }
+  function applyScan(raw) {
+    var p = normCode(raw);
+    if (!p.main || !eanOk(p.main)) { toast('Codice non valido, riprova'); return false; }
+    pendingCode = p.main; showPending();
+    var albs = listAll().filter(function (a) { return a.barcode === p.main; }).sort(function (x, y) { return y.updated - x.updated; });
+    var isBook = /^97[89]/.test(p.main);
+    if (albs.length) {
+      var last = albs[0], num = '';
+      if (isBook) num = last.numero;
+      else if (p.addon.length === 2 && isNum(p.addon)) num = String(+p.addon);
+      else {
+        var mx = -1;
+        albs.forEach(function (a) { if (a.collana === last.collana && isNum(a.numero)) mx = Math.max(mx, +a.numero); });
+        num = mx >= 0 ? String(mx + 1) : '';
+      }
+      $('#f-collana').value = last.collana; $('#f-ed').value = last.editore; $('#f-num').value = num;
+      showNew = false; renderMatches();
+      toast('Riconosciuto: ' + last.collana);
+    } else {
+      $('#f-collana').value = ''; $('#f-num').value = ''; $('#f-ed').value = '';
+      showNew = false; renderMatches();
+      toast('Codice nuovo: scrivi la serie e il numero, la prossima volta la riconosco');
+      setTimeout(function () { $('#f-collana').focus(); }, 50);
+    }
+    return true;
+  }
+  function stopScan() {
+    clearTimeout(scanTimer); scanTimer = null;
+    if (scanStream) { scanStream.getTracks().forEach(function (t) { t.stop(); }); scanStream = null; }
+    var v = $('#scan-video'); v.srcObject = null;
+  }
+  function closeScan() { stopScan(); $('#scan-bg').hidden = true; layerShut('scan'); }
+  async function openScan() {
+    $('#scan-bg').hidden = false; layerOpen('scan', closeScan);
+    $('#scan-manual').value = '';
+    var hint = $('#scan-hint'), v = $('#scan-video');
+    v.hidden = true;
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { hint.textContent = 'Questo dispositivo non legge i codici con la fotocamera: scrivi le cifre qui sotto.'; return; }
+    try {
+      var fm = await BarcodeDetector.getSupportedFormats();
+      var want = ['ean_13', 'ean_8', 'upc_a', 'upc_e'].filter(function (f) { return fm.indexOf(f) >= 0; });
+      scanDet = new BarcodeDetector({ formats: want });
+      scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
+      v.srcObject = scanStream; v.hidden = false;
+      await v.play();
+      hint.textContent = 'Inquadra il codice a barre dell’albo.';
+      var tick = async function () {
+        if (!scanStream) return;
+        try {
+          var r = await scanDet.detect(v);
+          if (r && r.length) {
+            var raw = r[0].rawValue;
+            if (eanOk(normCode(raw).main)) { if (navigator.vibrate) navigator.vibrate(60); if (applyScan(raw)) { closeScan(); return; } }
+          }
+        } catch (e) {}
+        scanTimer = setTimeout(tick, 150);
+      };
+      tick();
+    } catch (e) {
+      stopScan(); v.hidden = true;
+      hint.textContent = 'Non posso usare la fotocamera (permesso negato?): scrivi le cifre qui sotto.';
+    }
   }
 
   /* ---------- ricerca online (Comic Vine, tramite la funzione di Supabase) ---------- */
@@ -1165,7 +1273,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (v.err) { showMsg($('#msg'), v.err); return; }
     var now = Date.now();
     var a = Object.assign({ id: uid(), url: '', source: 'app', cover: draft.cover, coverState: draft.cover ? draft.state : 'missing', coverId: null,
-      coverDirty: !!draft.cover, trash: [], created: now, updated: now, deleted: false, dirty: true }, v.rec);
+      coverDirty: !!draft.cover, trash: [], barcode: pendingCode || '', created: now, updated: now, deleted: false, dirty: true }, v.rec);
+    clearPending();
     store.set(a.id, a);
     putRec(a); if (a.box) setMeta('box', a.box); flush();
     var typedNum = $('#f-num').value;
@@ -1978,7 +2087,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     } catch (e) { thumbing = false; btn.textContent = 'Crea le miniature'; toast('Non riesco a leggere l\u2019elenco: riprova'); return; }
     var todo = listAll().filter(function (a) { return a.coverId && a.coverId.indexOf(uidp + '/') === 0 && !a.coverDirty && !have.has(thumbPath(a.coverId)); });
     if (!todo.length) { thumbing = false; btn.textContent = 'Crea le miniature'; toast('Le miniature ci sono già tutte'); return; }
-    var base = CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/', done = 0, ok = 0, fail = 0, idx = 0;
+    var base = CFG.url.replace(/\/+$/, '') + '/storage/v1/object/public/covers/', done = 0, ok = 0, fail = 0, idx = 0, lastErr = '';
     var shown = function () { btn.textContent = 'Creo ' + done + ' di ' + todo.length + ' · toccami per fermare'; };
     shown();
     var worker = async function () {
@@ -1990,10 +2099,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
           if (!src) { var r = await fetch(base + a.coverId, { mode: 'cors' }); if (!r.ok) throw new Error('http'); src = await r.blob(); }
           var tb = await makeThumb(src);
           if (!tb) throw new Error('thumb');
-          var up = await sb.storage.from('covers').upload(thumbPath(a.coverId), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: true });
-          if (up.error) throw up.error;
+          var up = await sb.storage.from('covers').upload(thumbPath(a.coverId), tb, { contentType: 'image/jpeg', cacheControl: '31536000', upsert: false });
+          if (up.error && !/exist|duplicate/i.test(String(up.error.message))) throw up.error;
           noThumb.delete(a.coverId); ok++;
-        } catch (e) { fail++; }
+        } catch (e) { fail++; lastErr = (e && e.message) || String(e); }
         done++;
         if (done % 5 === 0) shown();
       }
@@ -2001,7 +2110,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     await Promise.all([worker(), worker(), worker()]);
     thumbing = false; btn.textContent = 'Crea le miniature';
     renderAll();
-    toast((thumbStop ? 'Interrotto. ' : '') + 'Miniature create: ' + ok + (fail ? ' · ' + fail + ' non riuscite' : ''));
+    toast((thumbStop ? 'Interrotto. ' : '') + 'Miniature create: ' + ok + (fail ? ' · ' + fail + ' non riuscite (' + lastErr + ')' : ''));
   }
 
   /* ---------- copertine mancanti: si scaricano da ComicsBox attraverso la funzione su Supabase ---------- */
@@ -2180,7 +2289,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       var d = list[i];
       if (!d || !d.id || !norm(d.collana)) continue;
       var rec = fromDoc(String(d.id), { collana: norm(d.collana), numero: norm(d.numero), editore: norm(d.editore), box: cleanBox(d.box), anno: d.anno, url: d.url, titolo: d.titolo,
-        source: d.source, coverState: d.coverState === 'none' ? 'none' : 'missing', coverId: null, created: d.created, updated: d.updated, deleted: d.deleted });
+        source: d.source, coverState: d.coverState === 'none' ? 'none' : 'missing', coverId: null, barcode: d.barcode, created: d.created, updated: d.updated, deleted: d.deleted });
       var ex = store.get(rec.id);
       if (ex && ex.updated >= rec.updated) continue;
       if (d.cover && d.coverState === 'photo' && !rec.deleted) {
@@ -2343,6 +2452,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-fetch').addEventListener('click', fetchCovers);
   $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-thumbs').addEventListener('click', makeThumbs);
+  $('#btn-scan').addEventListener('click', openScan);
+  $('#scan-close').addEventListener('click', closeScan);
+  $('#scan-bg').addEventListener('click', function (e) { if (e.target === $('#scan-bg')) closeScan(); });
+  $('#scan-use').addEventListener('click', function () { if (applyScan($('#scan-manual').value)) closeScan(); });
+  $('#scan-manual').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); if (applyScan($('#scan-manual').value)) closeScan(); } });
 
   $('#btn-covs').addEventListener('click', function () { $('#in-covs').click(); });
   $('#in-covs').addEventListener('change', function () { var arr = Array.prototype.slice.call($('#in-covs').files || []); $('#in-covs').value = ''; if (arr.length) bulkCovers(arr); });
@@ -2359,7 +2473,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#s-save').addEventListener('click', saveSheet);
   $('#s-del').addEventListener('click', deleteSheet);
   $('#s-nocov').addEventListener('click', function () { var a = store.get(editId); if (a) removeCover(a); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#lightbox').hidden) { closeLightbox(); return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#scan-bg').hidden) { closeScan(); return; } if (!$('#lightbox').hidden) { closeLightbox(); return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
   window.addEventListener('online', function () { if (session) { pull(); } else if (sb) showLogin(); renderSync(); });
   window.addEventListener('offline', renderSync);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) pull(); });
