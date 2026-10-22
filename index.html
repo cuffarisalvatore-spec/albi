@@ -250,18 +250,18 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   body>*:not(#print-area){display:none!important}
   html,body{background:#fff!important;color:#000!important;margin:0!important}
   /* il foglio si taglia lungo la linea tratteggiata, a 1,5 cm dal bordo destro */
-  #print-area{display:block;font:13pt/1.45 system-ui,sans-serif;color:#000;padding:1.2cm 2.4cm 1cm 1.2cm;box-sizing:border-box}
+  #print-area{display:block;font:12pt/1.45 system-ui,sans-serif;color:#000;padding:1.2cm 2.4cm 1cm 1.2cm;box-sizing:border-box}
   #print-area::after{content:"";position:fixed;top:0;bottom:0;right:1.5cm;border-right:1.5px dashed #777}
   .pbox{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .phead{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 12px}
-  .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:35pt;line-height:1.05;margin:0}
+  .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:34pt;line-height:1.05;margin:0}
   .plogo{display:flex;align-items:center;gap:3px;font-size:30pt;line-height:1;font-family:var(--font-display);flex:none}
   .pin{font-weight:600;color:var(--accent)}
   .pbx{font-weight:700;letter-spacing:.06em;background:var(--accent);color:var(--on-accent);padding:3px 10px 2px;border-radius:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pbody{border:1px solid #cfcfcf;border-radius:6px;padding:12px 16px}
-  .phead h2 .pn{font-size:23pt}
+  .phead h2 .pn{font-size:22pt}
   .pbody p{margin:4px 0}
-  .pbody ul.pant{margin:0 0 8px;padding-left:56px;font-size:11pt;line-height:1.4;list-style:disc}
+  .pbody ul.pant{margin:0 0 8px;padding-left:56px;font-size:10pt;line-height:1.4;list-style:disc}
   .pbody ul.pant li{margin:1px 0}
   .pbody b{color:#8b1a1a;text-transform:uppercase}
 }
@@ -448,7 +448,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v62</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v63</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
