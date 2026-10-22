@@ -1,6 +1,6 @@
 /* Service worker di inBOX: apre l'app anche senza rete.
    Cambia VERSION quando pubblichi una nuova versione dei file. */
-var VERSION = 'v63';
+var VERSION = 'v64';
 var SHELL = 'albi-shell-' + VERSION;
 var RUNTIME = 'albi-runtime-v3';
 var FILES = ['./', 'index.html', 'config.js', 'vendor/supabase.js', 'manifest.webmanifest',
