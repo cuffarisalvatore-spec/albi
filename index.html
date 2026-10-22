@@ -447,7 +447,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v59</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v60</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -2333,15 +2333,24 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     listAll().forEach(function (a) { if (!a.cover && a.coverId) { urls.push(wbase + a.coverId); if (!noThumb.has(a.coverId)) urls.push(wbase + thumbPath(a.coverId)); } });
     if (!urls.length) { toast('Non ci sono copertine da scaricare'); return; }
     warming = true;
-    var btn = $('#btn-warm'), label = btn.textContent, done = 0, fail = 0, idx = 0, stop = false;
-    btn.disabled = true;
+    var btn = $('#btn-warm'), label = btn.textContent, done = 0, fail = 0, idx = 0, stop = false, skip404 = [];
+    btn.disabled = true; btn.textContent = 'Controllo cosa manca…';
+    // si scarica solo ciò che non è già nella memoria del telefono
+    var total = urls.length, missing = [];
+    for (var qi = 0; qi < urls.length; qi++) {
+      var hit = null;
+      try { hit = await caches.match(urls[qi], { ignoreSearch: true }); } catch (e) {}
+      if (!hit || hit.type === 'opaque') missing.push(urls[qi]);
+    }
+    urls = missing;
+    if (!urls.length) { warming = false; btn.disabled = false; btn.textContent = label; toast('Tutto già sul telefono (' + total + ' immagini)'); return; }
     var worker = async function () {
       while (!stop) {
         var u = urls[idx++];
         if (!u) return;
         try {
           var r = await fetch(u, { mode: 'cors' });
-          if (r.status === 404 && /_t\.jpg$/.test(u)) { done++; continue; }
+          if (r.status === 404 && /_t\.jpg$/.test(u)) { skip404.push(u); done++; continue; }
           if (!r.ok) throw new Error('http');
           await r.blob();
           fail = 0;
@@ -2352,7 +2361,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     warming = false; btn.disabled = false; btn.textContent = label;
-    toast(stop ? 'Interrotto: controlla la connessione e riprova' : 'Copertine pronte sul telefono (' + urls.length + ')');
+    toast(stop ? 'Interrotto: controlla la connessione e riprova' : 'Scaricate ' + (urls.length - skip404.length) + ' immagini mancanti; ora sul telefono c\u2019è tutto (' + total + ')');
   }
 
   /* ---------- copertine in blocco ---------- */
