@@ -48,7 +48,9 @@ h1,h2{font-family:var(--font-display);text-transform:uppercase;margin:0;font-wei
 h1{font-size:32px;letter-spacing:.02em;line-height:1}
 h2{font-size:19px;letter-spacing:.06em;color:var(--muted)}
 .top{display:flex;align-items:baseline;justify-content:space-between;gap:6px 12px;padding-block:4px 14px;flex-wrap:wrap}
-.topr{display:flex;gap:6px 14px;align-items:baseline;flex-wrap:wrap}
+.topr{display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;margin-left:auto;justify-content:flex-end}
+.logo{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.menubtn{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
 .sub{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
 .sync{font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
 .sync::before{content:"";width:9px;height:9px;border-radius:50%;background:var(--muted)}
@@ -268,8 +270,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 <body>
 <div class="wrap">
   <header class="top">
-    <h1 class="logo" aria-label="inBOX"><span class="in">in</span><span class="bx">BOX</span></h1>
-    <div class="topr"><span class="sub" id="status"></span><span class="sync" id="sync" role="status"></span></div>
+    <h1 class="logo" id="logo" role="button" tabindex="0" aria-label="inBOX, torna alla home"><span class="in">in</span><span class="bx">BOX</span></h1>
+    <div class="topr"><span class="sub" id="status"></span><span class="sync" id="sync" role="status"></span>
+      <button type="button" class="menubtn" id="btn-menu" aria-label="Opzioni"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
   </header>
   <div id="banner" class="banner" role="status" hidden></div>
 
@@ -347,31 +350,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <select id="fcov" aria-label="Filtra per copertina" style="grid-column:1/-1"><option value="">Tutte le copertine</option><option value="no">Solo albi senza copertina</option><option value="yes">Solo albi con copertina</option></select>
     </div>
     <div id="groups" class="stack"></div>
-    <div class="actions cols">
-      <button type="button" class="btn" id="btn-import">Importa da ComicsBox</button>
-      <button type="button" class="btn" id="btn-covs">Importa copertine</button>
-      <button type="button" class="btn" id="btn-fetch" hidden>Scarica copertine mancanti</button>
-      <button type="button" class="btn" id="btn-warm">Scarica copertine sul telefono</button>
-      <button type="button" class="btn" id="btn-thumbs">Crea le miniature</button>
-      <button type="button" class="btn" id="btn-slim">Riduci le copertine salvate</button>
-      <button type="button" class="btn" id="btn-export">Esporta CSV</button>
-      <button type="button" class="btn" id="btn-antol">Testate antologiche (stampa)…</button>
-    </div>
-    <div class="actions cols">
-      <button type="button" class="btn" id="btn-bk">Esporta backup</button>
-      <button type="button" class="btn" id="btn-bki">Importa backup</button>
-      <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
-      <button type="button" class="btn" id="btn-out">Esci</button>
-    </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v55</p>
-    <p class="hint" id="acct"></p>
-    <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
-    <input type="file" id="in-bk" accept=".json,application/json" hidden>
-    <div class="card" id="csvpanel" hidden>
-      <p class="hint">Il download non è disponibile qui. Copia il testo e incollalo in un file .csv.</p>
-      <textarea id="csvtext" class="csvbox" readonly aria-label="Contenuto CSV"></textarea>
-      <button type="button" class="btn" id="csvcopy">Copia</button>
-    </div>
   </section>
 
   <section id="v-cov" class="view" aria-label="Copertine da completare" hidden>
@@ -446,6 +424,36 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="numrow" style="grid-template-columns:1fr auto">
       <input id="scan-manual" inputmode="numeric" autocomplete="off" placeholder="oppure scrivi le cifre">
       <button type="button" class="btn" id="scan-use">Usa</button>
+    </div>
+  </div>
+</div>
+<div id="menu-bg" class="sheet-bg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+    <div class="labrow"><h2 id="menu-title">Opzioni</h2><button type="button" class="btn text" id="menu-close">Chiudi</button></div>
+    <div class="actions cols">
+      <button type="button" class="btn" id="btn-import">Importa da ComicsBox</button>
+      <button type="button" class="btn" id="btn-covs">Importa copertine</button>
+      <button type="button" class="btn" id="btn-fetch" hidden>Scarica copertine mancanti</button>
+      <button type="button" class="btn" id="btn-warm">Scarica copertine sul telefono</button>
+      <button type="button" class="btn" id="btn-thumbs">Crea le miniature</button>
+      <button type="button" class="btn" id="btn-slim">Riduci le copertine salvate</button>
+      <button type="button" class="btn" id="btn-export">Esporta CSV</button>
+      <button type="button" class="btn" id="btn-antol">Testate antologiche (stampa)…</button>
+    </div>
+    <div class="actions cols">
+      <button type="button" class="btn" id="btn-bk">Esporta backup</button>
+      <button type="button" class="btn" id="btn-bki">Importa backup</button>
+      <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
+      <button type="button" class="btn" id="btn-out">Esci</button>
+    </div>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v57</p>
+    <p class="hint" id="acct"></p>
+    <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
+    <input type="file" id="in-bk" accept=".json,application/json" hidden>
+    <div class="card" id="csvpanel" hidden>
+      <p class="hint">Il download non è disponibile qui. Copia il testo e incollalo in un file .csv.</p>
+      <textarea id="csvtext" class="csvbox" readonly aria-label="Contenuto CSV"></textarea>
+      <button type="button" class="btn" id="csvcopy">Copia</button>
     </div>
   </div>
 </div>
@@ -2589,6 +2597,27 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-thumbs').addEventListener('click', makeThumbs);
   $('#btn-antol').addEventListener('click', openAntol);
+  /* menu delle opzioni e logo che riporta alla home */
+  var menuPass = false, MENU_KEEP = { 'btn-warm': 1, 'btn-thumbs': 1, 'btn-slim': 1, 'btn-fetch': 1, 'menu-close': 1 };
+  function openMenu() { $('#menu-bg').hidden = false; layerOpen('menu', closeMenu); }
+  function closeMenu() { $('#menu-bg').hidden = true; layerShut('menu'); }
+  $('#btn-menu').addEventListener('click', openMenu);
+  $('#menu-close').addEventListener('click', closeMenu);
+  $('#menu-bg').addEventListener('click', function (e) { if (e.target === $('#menu-bg')) closeMenu(); });
+  // un tocco su un'opzione chiude il menu e poi la esegue (i lavori lunghi restano nel menu, con il loro avanzamento)
+  $('#menu-bg').addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('button');
+    if (menuPass || !b || !b.id || MENU_KEEP[b.id] || b.id === 'menu-close') return;
+    e.stopPropagation();
+    closeMenu();
+    setTimeout(function () { menuPass = true; try { b.click(); } finally { menuPass = false; } }, 280);
+  }, true);
+  function goHome() {
+    layers.slice().reverse().forEach(function (l) { if (l.name !== 'tab') { try { l.close(); } catch (e) {} } });
+    showView('v-list');
+  }
+  $('#logo').addEventListener('click', goHome);
+  $('#logo').addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goHome(); } });
   $('#antol-close').addEventListener('click', closeAntol);
   $('#antol-q').addEventListener('input', renderAntol);
   $('#antol-bg').addEventListener('click', function (e) { if (e.target === $('#antol-bg')) closeAntol(); });
@@ -2613,7 +2642,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#s-save').addEventListener('click', saveSheet);
   $('#s-del').addEventListener('click', deleteSheet);
   $('#s-nocov').addEventListener('click', function () { var a = store.get(editId); if (a) removeCover(a); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#scan-bg').hidden) { closeScan(); return; } if (!$('#lightbox').hidden) { closeLightbox(); return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { if (!$('#menu-bg').hidden) { closeMenu(); return; } if (!$('#scan-bg').hidden) { closeScan(); return; } if (!$('#lightbox').hidden) { closeLightbox(); return; } if (!$('#sheet-bg').hidden) { closeSheet(); return; } if (!$('#ser-bg').hidden) { closeSer(); return; } if (!$('#imp-bg').hidden) closeImport(); } });
   window.addEventListener('online', function () { if (session) { pull(); } else if (sb) showLogin(); renderSync(); });
   window.addEventListener('offline', renderSync);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) pull(); });
