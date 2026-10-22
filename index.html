@@ -157,7 +157,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 :root{--tool-bg:#e3ebf1;--tool-line:#c3d1dc;--out-bg:#f9dedb;--out-line:#e3aaa5;--out-ink:#8f1d16}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}}
 :root[data-theme="dark"]{--tool-bg:#23303b;--tool-line:#35485a;--out-bg:#3d1f1d;--out-line:#7a3a35;--out-ink:#ffb4ab}
-#btn-import,#btn-covs,#btn-fetch,#btn-scan,#btn-warm,#btn-thumbs,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
+#btn-import,#btn-covs,#btn-fetch,#btn-scan,#btn-antol,#btn-warm,#btn-thumbs,#btn-slim,#btn-export,#btn-bk,#btn-bki,#btn-install{background:var(--tool-bg);border-color:var(--tool-line)}
 #btn-out{background:var(--out-bg);border-color:var(--out-line);color:var(--out-ink)}
 .vbtns{display:flex;flex:none;white-space:nowrap}
 /* le serie lunghe: il telefono disegna solo le tessere e le righe che si vedono (o quasi) */
@@ -242,18 +242,24 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 .scanrow{display:grid;gap:4px;margin:0 0 10px}
 .scanvid{width:100%;aspect-ratio:4/3;object-fit:cover;background:#000;border-radius:10px}
 @media screen{#print-area{display:none}}
+@page{size:A4;margin:0}
 @media print{
   body>*:not(#print-area){display:none!important}
-  html,body{background:#fff!important;color:#000!important}
-  #print-area{display:block;font:11pt/1.4 system-ui,sans-serif;color:#000}
+  html,body{background:#fff!important;color:#000!important;margin:0!important}
+  /* il foglio si taglia lungo la linea tratteggiata, a 1,5 cm dal bordo destro */
+  #print-area{display:block;font:14pt/1.45 system-ui,sans-serif;color:#000;padding:1.2cm 2.4cm 1cm 1.2cm;box-sizing:border-box}
+  #print-area::after{content:"";position:fixed;top:0;bottom:0;right:1.5cm;border-right:1.5px dashed #777}
   .pbox{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .phead{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px}
-  .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:22pt;margin:0}
-  .plogo{display:flex;align-items:center;gap:2px;font-size:20pt;line-height:1;font-family:var(--font-display)}
+  .phead{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 12px}
+  .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:36pt;line-height:1.05;margin:0}
+  .plogo{display:flex;align-items:center;gap:3px;font-size:30pt;line-height:1;font-family:var(--font-display);flex:none}
   .pin{font-weight:600;color:var(--accent)}
-  .pbx{font-weight:700;letter-spacing:.06em;background:var(--accent);color:var(--on-accent);padding:2px 7px 1px;border-radius:5px}
-  .pbody{border:1px solid #cfcfcf;border-radius:6px;padding:10px 14px}
-  .pbody p{margin:3px 0}
+  .pbx{font-weight:700;letter-spacing:.06em;background:var(--accent);color:var(--on-accent);padding:3px 10px 2px;border-radius:7px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pbody{border:1px solid #cfcfcf;border-radius:6px;padding:12px 16px}
+  .phead h2 .pn{font-size:24pt}
+  .pbody p{margin:4px 0}
+  .pbody ul.pant{margin:0 0 8px;padding-left:56px;font-size:12.5pt;line-height:1.4;list-style:disc}
+  .pbody ul.pant li{margin:1px 0}
   .pbody b{color:#8b1a1a;text-transform:uppercase}
 }
 </style>
@@ -349,6 +355,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-thumbs">Crea le miniature</button>
       <button type="button" class="btn" id="btn-slim">Riduci le copertine salvate</button>
       <button type="button" class="btn" id="btn-export">Esporta CSV</button>
+      <button type="button" class="btn" id="btn-antol">Testate antologiche (stampa)…</button>
     </div>
     <div class="actions cols">
       <button type="button" class="btn" id="btn-bk">Esporta backup</button>
@@ -356,7 +363,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v50</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v53</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -440,6 +447,14 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <input id="scan-manual" inputmode="numeric" autocomplete="off" placeholder="oppure scrivi le cifre">
       <button type="button" class="btn" id="scan-use">Usa</button>
     </div>
+  </div>
+</div>
+<div id="antol-bg" class="sheet-bg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="antol-title">
+    <div class="labrow"><h2 id="antol-title">Testate antologiche</h2><button type="button" class="btn text" id="antol-close">Chiudi</button></div>
+    <p class="hint">Per le testate spuntate, nella stampa del box compaiono sotto il nome anche i titoli dei singoli albi (raggruppati: «Abyss 1-4»). Vale su questo dispositivo.</p>
+    <input id="antol-q" placeholder="Cerca una testata" autocomplete="off">
+    <div id="antol-list" class="stack" style="gap:0"></div>
   </div>
 </div>
 <div id="ser-bg" class="sheet-bg" hidden>
@@ -2093,7 +2108,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 
   /* ---------- stampa riepilogo dei box ---------- */
   // numeri -> "dal 1 al 45" se è un solo blocco, altrimenti "1-45, 47, 50-60"; i numeri non numerici in coda
-  function rangeText(nums, extra, solo) {
+  function rangeParts(nums) {
     var ns = Array.from(new Set(nums)).sort(function (x, y) { return x - y; }), parts = [], i = 0;
     while (i < ns.length) {
       var j = i;
@@ -2101,7 +2116,39 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       parts.push(j > i ? [ns[i], ns[j]] : [ns[i]]);
       i = j + 1;
     }
-    var txt;
+    return parts;
+  }
+  // testate antologiche: i titoli degli albi, riassunti ("Abyss n.1" ... "Abyss n.4" -> "Abyss 1-4")
+  var antol = new Set();
+  try { JSON.parse(localStorage.getItem('aib-antol') || '[]').forEach(function (x) { antol.add(String(x)); }); } catch (e) {}
+  function saveAntol() { try { localStorage.setItem('aib-antol', JSON.stringify(Array.from(antol))); } catch (e) {} }
+  var TIT_RE = /^(.*?[^\s#.,:;\-–—(])(?:[\s,.:;\-–—(#]+(?:(?:n|nr|no|num|numero|vol|volume|parte|part|pt|cap|capitolo|ep|episodio)\.?\s*)?|\s*#\s*)(\d{1,3})\)?\s*$/i;
+  function titoliRiassunti(items) {
+    var arr = items.filter(function (x) { return norm(x.titolo || ''); }).sort(function (x, y) { return (isNum(x.numero) && isNum(y.numero)) ? x.numero - y.numero : String(x.numero).localeCompare(String(y.numero), 'it', { numeric: true }); });
+    var groups = new Map();
+    arr.forEach(function (x) {
+      var t = norm(x.titolo), m = TIT_RE.exec(t), base = m ? m[1].trim() : t, k = plain(base);
+      if (!groups.has(k)) groups.set(k, { base: base, nums: [] });
+      if (m) groups.get(k).nums.push(+m[2]);
+    });
+    return Array.from(groups.values()).map(function (g) {
+      return g.nums.length ? g.base + ' ' + rangeParts(g.nums).map(function (q) { return q.length === 2 ? q[0] + '-' + q[1] : String(q[0]); }).join(', ') : g.base;
+    });
+  }
+  function openAntol() { $('#antol-q').value = ''; renderAntol(); $('#antol-bg').hidden = false; layerOpen('antol', closeAntol); }
+  function closeAntol() { $('#antol-bg').hidden = true; layerShut('antol'); }
+  function renderAntol() {
+    var q = plain($('#antol-q').value), l = $('#antol-list');
+    l.textContent = '';
+    collaneList().filter(function (c) { return !q || plain(c).indexOf(q) >= 0 || antol.has(c.toLowerCase()); }).forEach(function (c) {
+      var cb = h('input', { type: 'checkbox' });
+      cb.checked = antol.has(c.toLowerCase());
+      cb.addEventListener('change', function () { if (cb.checked) antol.add(c.toLowerCase()); else antol.delete(c.toLowerCase()); saveAntol(); });
+      l.append(h('label', { style: 'display:flex;gap:8px;align-items:center;padding:6px 0' }, cb, c));
+    });
+  }
+  function rangeText(nums, extra, solo) {
+    var parts = rangeParts(nums), txt;
     if (parts.length === 1 && parts[0].length === 2 && !extra.length) txt = 'dal ' + parts[0][0] + ' al ' + parts[0][1];
     else {
       var out = parts.map(function (q) { return q.length === 2 ? q[0] + '-' + q[1] : String(q[0]); });
@@ -2116,8 +2163,8 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       if (!a.box || (only != null && a.box !== only)) return;
       if (!boxes.has(a.box)) boxes.set(a.box, new Map());
       var m = boxes.get(a.box), k = a.collana.toLowerCase();
-      if (!m.has(k)) m.set(k, { nome: a.collana, nums: [], extra: [], solo: false, n: 0 });
-      var g = m.get(k); g.n++;
+      if (!m.has(k)) m.set(k, { nome: a.collana, nums: [], extra: [], solo: false, n: 0, items: [] });
+      var g = m.get(k); g.n++; g.items.push(a);
       var nu = norm(a.numero || '');
       if (!nu) g.solo = true; else if (isNum(nu)) g.nums.push(+nu); else if (g.extra.indexOf(nu) < 0) g.extra.push(nu);
     });
@@ -2126,7 +2173,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       var righe = Array.from(m.values()).sort(function (x, y) { return x.nome.localeCompare(y.nome, 'it'); }).map(function (g) {
         tot += g.n;
         var t = rangeText(g.nums, g.extra, g.solo);
-        return { nome: g.nome, testo: t };
+        return { nome: g.nome, testo: t, titoli: antol.has(g.nome.toLowerCase()) ? titoliRiassunti(g.items) : [] };
       });
       return { box: b, tot: tot, righe: righe };
     });
@@ -2139,10 +2186,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     pa.textContent = '';
     data.forEach(function (d) {
       var body = h('div', { class: 'pbody' });
-      d.righe.forEach(function (r) { body.append(h('p', null, h('b', { text: r.nome }), r.testo ? ': ' + r.testo : '')); });
+      d.righe.forEach(function (r) {
+        body.append(h('p', null, h('b', { text: r.nome }), r.testo ? ': ' + r.testo : ''));
+        if (r.titoli.length) { var ul = h('ul', { class: 'pant' }); r.titoli.forEach(function (t) { ul.append(h('li', { text: t })); }); body.append(ul); }
+      });
       pa.append(h('section', { class: 'pbox' },
         h('div', { class: 'phead' },
-          h('h2', { text: boxLabel(d.box) + ' · ' + d.tot + (d.tot === 1 ? ' albo' : ' albi') }),
+          h('h2', null, boxLabel(d.box), h('span', { class: 'pn', text: ' \u00b7 ' + d.tot + (d.tot === 1 ? ' albo' : ' albi') })),
           h('span', { class: 'plogo', 'aria-hidden': 'true' }, h('span', { class: 'pin', text: 'in' }), h('span', { class: 'pbx', text: 'BOX' }))),
         body));
     });
@@ -2534,6 +2584,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-fetch').addEventListener('click', fetchCovers);
   $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-thumbs').addEventListener('click', makeThumbs);
+  $('#btn-antol').addEventListener('click', openAntol);
+  $('#antol-close').addEventListener('click', closeAntol);
+  $('#antol-q').addEventListener('input', renderAntol);
+  $('#antol-bg').addEventListener('click', function (e) { if (e.target === $('#antol-bg')) closeAntol(); });
   $('#btn-scan').addEventListener('click', openScan);
   $('#scan-close').addEventListener('click', closeScan);
   $('#scan-bg').addEventListener('click', function (e) { if (e.target === $('#scan-bg')) closeScan(); });
