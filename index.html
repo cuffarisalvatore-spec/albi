@@ -363,7 +363,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v53</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v54</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -2107,7 +2107,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
 
   /* ---------- stampa riepilogo dei box ---------- */
-  // numeri -> "dal 1 al 45" se è un solo blocco, altrimenti "1-45, 47, 50-60"; i numeri non numerici in coda
+  // numeri -> "da 1 a 45" se è un solo blocco, altrimenti "1-45, 47, 50-60"; i numeri non numerici in coda
   function rangeParts(nums) {
     var ns = Array.from(new Set(nums)).sort(function (x, y) { return x - y; }), parts = [], i = 0;
     while (i < ns.length) {
@@ -2149,7 +2149,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   }
   function rangeText(nums, extra, solo) {
     var parts = rangeParts(nums), txt;
-    if (parts.length === 1 && parts[0].length === 2 && !extra.length) txt = 'dal ' + parts[0][0] + ' al ' + parts[0][1];
+    if (parts.length === 1 && parts[0].length === 2 && !extra.length) txt = 'da ' + parts[0][0] + ' a ' + parts[0][1];
     else {
       var out = parts.map(function (q) { return q.length === 2 ? q[0] + '-' + q[1] : String(q[0]); });
       txt = out.concat(extra).join(', ');
