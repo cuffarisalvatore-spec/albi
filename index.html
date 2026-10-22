@@ -363,7 +363,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v54</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v55</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -2119,8 +2119,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     return parts;
   }
   // testate antologiche: i titoli degli albi, riassunti ("Abyss n.1" ... "Abyss n.4" -> "Abyss 1-4")
-  var antol = new Set();
-  try { JSON.parse(localStorage.getItem('aib-antol') || '[]').forEach(function (x) { antol.add(String(x)); }); } catch (e) {}
+  var ANTOL_BASE = ['Best Comics - Wildstorm Presenta','Collana Bookstore','Cult Comics','Cult Miniserie','DC Absolute','DC Anniversary','DC Anthology','DC Black Label Complete Collection','DC Black Label Deluxe','DC Black Label Library','DC Collection (Panini Comics)','DC Collection (Play Press)','DC Comics One-shot','DC Crossover','DC Deluxe','DC Essential','DC Eventi','DC Evergreen','DC Library','DC Maxiserie','DC Multiverse','DC Omnibus','DC Rebirth Collection','DC Sagas','Eroi 2000 (Cult Comics)','Grandi Opere DC','L’Uomo Ragno Speciale','Lion Extra','Marvel Arts','Marvel Collection (II)','Marvel Crossover','Marvel Deluxe','Marvel Geeks','Marvel Heroes Book','Marvel History','Marvel Hits','Marvel Masterworks','Marvel Mega','Marvel Miniserie','Marvel Mix','Marvel Movie','Marvel Must-Have','Marvel Omnibus','Marvel Original Graphic Novel','Marvel Oro','Marvel Saga (I)','Marvel Special','Marvel Tales','Marvel Top','Marvel Universe','Marvel World','Play Book','Play Extra','Play Press Presenta','Prospero’s Books','Road to G.I. Joe','Special Events','Speciale Vendicator','Speciale X-men','Star Magazine Oro'];
+  var antol = new Set(); // chiavi semplificate dei nomi (senza maiuscole, apostrofi e punteggiatura)
+  try { JSON.parse(localStorage.getItem('aib-antol') || '[]').forEach(function (x) { antol.add(plain(x)); }); } catch (e) {}
+  try {
+    if (localStorage.getItem('aib-antol-base') !== '1') { ANTOL_BASE.forEach(function (x) { antol.add(plain(x)); }); localStorage.setItem('aib-antol-base', '1'); localStorage.setItem('aib-antol', JSON.stringify(Array.from(antol))); }
+  } catch (e) {}
   function saveAntol() { try { localStorage.setItem('aib-antol', JSON.stringify(Array.from(antol))); } catch (e) {} }
   var TIT_RE = /^(.*?[^\s#.,:;\-–—(])(?:[\s,.:;\-–—(#]+(?:(?:n|nr|no|num|numero|vol|volume|parte|part|pt|cap|capitolo|ep|episodio)\.?\s*)?|\s*#\s*)(\d{1,3})\)?\s*$/i;
   function titoliRiassunti(items) {
@@ -2140,10 +2144,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   function renderAntol() {
     var q = plain($('#antol-q').value), l = $('#antol-list');
     l.textContent = '';
-    collaneList().filter(function (c) { return !q || plain(c).indexOf(q) >= 0 || antol.has(c.toLowerCase()); }).forEach(function (c) {
+    collaneList().filter(function (c) { return !q || plain(c).indexOf(q) >= 0 || antol.has(plain(c)); }).forEach(function (c) {
       var cb = h('input', { type: 'checkbox' });
-      cb.checked = antol.has(c.toLowerCase());
-      cb.addEventListener('change', function () { if (cb.checked) antol.add(c.toLowerCase()); else antol.delete(c.toLowerCase()); saveAntol(); });
+      cb.checked = antol.has(plain(c));
+      cb.addEventListener('change', function () { if (cb.checked) antol.add(plain(c)); else antol.delete(plain(c)); saveAntol(); });
       l.append(h('label', { style: 'display:flex;gap:8px;align-items:center;padding:6px 0' }, cb, c));
     });
   }
@@ -2173,7 +2177,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       var righe = Array.from(m.values()).sort(function (x, y) { return x.nome.localeCompare(y.nome, 'it'); }).map(function (g) {
         tot += g.n;
         var t = rangeText(g.nums, g.extra, g.solo);
-        return { nome: g.nome, testo: t, titoli: antol.has(g.nome.toLowerCase()) ? titoliRiassunti(g.items) : [] };
+        return { nome: g.nome, testo: t, titoli: antol.has(plain(g.nome)) ? titoliRiassunti(g.items) : [] };
       });
       return { box: b, tot: tot, righe: righe };
     });
