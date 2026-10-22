@@ -48,7 +48,7 @@ h1,h2{font-family:var(--font-display);text-transform:uppercase;margin:0;font-wei
 h1{font-size:32px;letter-spacing:.02em;line-height:1}
 h2{font-size:19px;letter-spacing:.06em;color:var(--muted)}
 .top{display:flex;align-items:baseline;justify-content:space-between;gap:6px 12px;padding-block:4px 14px;flex-wrap:wrap}
-.topr{display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;margin-left:auto;justify-content:flex-end}
+.topr{display:flex;gap:10px;align-items:center;flex-wrap:nowrap;margin-left:auto;justify-content:flex-end}
 .logo{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .menubtn{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
 .sub{color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
@@ -271,8 +271,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 <div class="wrap">
   <header class="top">
     <h1 class="logo" id="logo" role="button" tabindex="0" aria-label="inBOX, torna alla home"><span class="in">in</span><span class="bx">BOX</span></h1>
-    <div class="topr"><span class="sub" id="status"></span><span class="sync" id="sync" role="status"></span>
+    <div class="topr"><span class="sync" id="sync" role="status"></span>
       <button type="button" class="menubtn" id="btn-menu" aria-label="Opzioni"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
+    <span id="status" hidden></span>
   </header>
   <div id="banner" class="banner" role="status" hidden></div>
 
@@ -446,7 +447,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v57</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v59</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
