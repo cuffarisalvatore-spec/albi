@@ -248,10 +248,17 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
 @page{size:A4;margin:0}
 @media print{
   body>*:not(#print-area){display:none!important}
-  html,body{background:#fff!important;color:#000!important;margin:0!important}
+  html,body{background:#fff!important;color:#000!important;margin:0!important;padding:0!important}
   /* il foglio si taglia lungo la linea tratteggiata, a 1,5 cm dal bordo destro */
-  #print-area{display:block;font:13pt/1.3 system-ui,sans-serif;color:#000;padding:.7cm 2.4cm .7cm 1.2cm;box-sizing:border-box}
+  #print-area{--ff:3.8cm;display:flex;flex-direction:column;position:relative;min-height:296mm;font:13pt/1.3 system-ui,sans-serif;color:#000;padding:1.07cm 2.82cm .7cm 1.62cm;box-sizing:border-box}
+  /* linea verticale: da parte a parte del foglio (si ripete su ogni foglio); la linea orizzontale arriva fino a lei */
   #print-area::after{content:"";position:fixed;top:0;bottom:0;right:1.5cm;border-right:1.5px dashed #777}
+  .pbox{margin-bottom:.5cm}
+  .pfoot{margin-top:auto;position:relative;height:var(--ff);padding-top:1.5cm;box-sizing:border-box;break-inside:avoid}
+  .pfoot::before{content:"";position:absolute;top:0;left:-1.62cm;right:-1.32cm;border-top:1.5px dashed #777}
+  .pfbox{height:100%;box-sizing:border-box;border:1px solid #cfcfcf;border-radius:6px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+  .pfbox h2{margin:0;text-transform:uppercase;letter-spacing:0;color:#000;font-size:42pt;line-height:1}
+  .pfoot .plogo{font-size:34pt}
   .pbox{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .phead{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 12px}
   .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:37pt;line-height:1.05;margin:0}
@@ -448,7 +455,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v70</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione v73</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -2209,6 +2216,10 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
           h('h2', null, boxLabel(d.box), h('span', { class: 'pn', text: ' \u00b7 ' + d.tot + (d.tot === 1 ? ' albo' : ' albi') })),
           h('span', { class: 'plogo', 'aria-hidden': 'true' }, h('span', { class: 'pin', text: 'in' }), h('span', { class: 'pbx', text: 'BOX' }))),
         body));
+      // riquadro in basso, con la linea di taglio sopra
+      pa.append(h('div', { class: 'pfoot' }, h('div', { class: 'pfbox' },
+        h('h2', { text: boxLabel(d.box) }),
+        h('span', { class: 'plogo', 'aria-hidden': 'true' }, h('span', { class: 'pin', text: 'in' }), h('span', { class: 'pbx', text: 'BOX' })))));
     });
     setTimeout(function () { window.print(); }, 50);
   }
