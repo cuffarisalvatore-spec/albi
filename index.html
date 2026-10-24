@@ -355,6 +355,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <div class="stack" style="gap:8px">
       <div class="labrow"><span class="lab" id="prog-t"></span><button type="button" class="btn text" id="btn-sel">Seleziona</button></div>
       <div class="meter" aria-hidden="true"><span id="prog-b"></span></div>
+      <div class="labrow" id="covprog" hidden><span class="hint" id="covprog-t"></span><button type="button" class="btn text" id="covprog-stop">Ferma</button></div>
       <div class="seg" id="view-seg" role="group" aria-label="Vista"><button type="button" data-mode="grid">Griglia</button><button type="button" data-mode="list">Elenco</button><button type="button" data-mode="box">Box</button></div>
     </div>
     <div class="toolbar">
@@ -459,7 +460,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione 1.1</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione 1.2</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -2090,7 +2091,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     });
     await putMany(changed);
     closeImport(); renderAll(); flush();
-    toast('Importati ' + cl.nuovi.length + ' albi' + (upd ? ', aggiornati ' + upd : '') + (cl.nuovi.length ? ' · le copertine: «Scarica copertine mancanti»' : ''));
+    toast('Importati ' + cl.nuovi.length + ' albi' + (upd ? ', aggiornati ' + upd : '') + (cl.nuovi.length && !ready() ? ' · le copertine: «Scarica copertine mancanti»' : ''));
+    // le copertine partono da sole, se sei collegato: si possono fermare dal pulsante «Ferma»
+    if (ready() && missingCovers().length) setTimeout(function () { fetchCovers(); }, 1500);
   }
 
   /* ---------- riduzione delle copertine già salvate (libera spazio su Supabase) ---------- */
@@ -2318,7 +2321,9 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     if (!todo.length) { toast('Nessuna copertina da scaricare'); return; }
     fetchingCov = true; fetchStop = false;
     var done = 0, ok = 0, none = 0, fail = 0, bad = 0, idx = 0, why = '', batch = [], skip = noCovMap(), fn = CFG.url.replace(/\/$/, '') + '/functions/v1/fumetti-cerca';
-    var shown = function () { btn.textContent = 'Scarico ' + done + ' di ' + todo.length + ' · tocca per fermare'; };
+    var cp = $('#covprog'), cpt = $('#covprog-t');
+    var shown = function () { btn.textContent = 'Scarico ' + done + ' di ' + todo.length + ' · tocca per fermare'; cpt.textContent = 'Scarico le copertine: ' + done + ' di ' + todo.length; };
+    cp.hidden = false;
     shown();
     var worker = async function () {
       while (!fetchStop) {
@@ -2358,6 +2363,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     try { localStorage.setItem('aib-nocov', JSON.stringify(skip)); } catch (e) {}
     flush();
     fetchingCov = false;
+    cp.hidden = true;
     renderAll();
     toast((why ? 'Fermato: ' + why + '. ' : '') + 'Scaricate ' + ok + ' copertine' + (none ? ' · ' + none + ' non presenti su ComicsBox' : '') + (fail ? ' · ' + fail + ' non riuscite' : ''));
   }
@@ -2643,6 +2649,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#btn-import').addEventListener('click', openImport);
   $('#btn-warm').addEventListener('click', warmCovers);
   $('#btn-fetch').addEventListener('click', fetchCovers);
+  $('#covprog-stop').addEventListener('click', function () { fetchStop = true; $('#covprog-t').textContent = 'Mi fermo…'; });
   $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-thumbs').addEventListener('click', makeThumbs);
   $('#btn-antol').addEventListener('click', openAntol);
