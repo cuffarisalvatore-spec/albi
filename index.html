@@ -263,6 +263,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   .pfbox{height:100%;box-sizing:border-box;border:1px solid #cfcfcf;border-radius:6px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;gap:14px}
   .pfbox h2{margin:0;text-transform:uppercase;letter-spacing:0;color:#000;font-size:44pt;line-height:1}
   .pfoot .plogo{font-size:36pt}
+  #print-area.plabs{display:block;min-height:0;padding:1cm 1.5cm}
+  #print-area.plabs::after{display:none}
+  .plab{height:4.2cm;box-sizing:border-box;margin:0 0 .3cm;border:1.5px dashed #777;padding:0 .8cm;display:flex;align-items:center;justify-content:space-between;gap:14px;break-inside:avoid}
+  .plab h2{margin:0;text-transform:uppercase;letter-spacing:0;color:#000;font-size:44pt;line-height:1}
+  .plab .plogo{font-size:36pt}
   .pbox{break-inside:avoid;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .phead{display:flex;justify-content:space-between;align-items:center;gap:14px;margin:0 0 12px}
   .phead h2{text-transform:uppercase;letter-spacing:0;color:#000;font-size:37pt;line-height:1.05;margin:0}
@@ -452,6 +457,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-thumbs">Crea le miniature</button>
       <button type="button" class="btn" id="btn-slim">Riduci le copertine salvate</button>
       <button type="button" class="btn" id="btn-export">Esporta CSV</button>
+      <button type="button" class="btn" id="btn-labs">Stampa frontespizi dei box…</button>
       <button type="button" class="btn" id="btn-antol">Testate antologiche (stampa)…</button>
     </div>
     <div class="actions cols">
@@ -460,7 +466,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione 1.3</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione 1.4</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -501,6 +507,15 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     <p class="hint" id="ren-hint"></p>
     <div class="field"><label for="ren-in">Nuovo nome (numero o sigla, es. 12 o 12A)</label><input id="ren-in" autocomplete="off"></div>
     <button type="button" class="btn primary" id="ren-go">Rinomina</button>
+  </div>
+</div>
+<div id="lab-bg" class="sheet-bg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="lab-title">
+    <div class="labrow"><h2 id="lab-title">Frontespizi dei box</h2><button type="button" class="btn text" id="lab-close">Chiudi</button></div>
+    <p class="hint">Scegli i box: i frontespizi (nome del box e logo) si stampano uno sotto l’altro, 6 per foglio, con il bordo tratteggiato da ritagliare.</p>
+    <div class="actions"><button type="button" class="btn small" id="lab-all">Tutti</button><button type="button" class="btn small" id="lab-none">Nessuno</button></div>
+    <div id="lab-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;margin:10px 0"></div>
+    <button type="button" class="btn primary" id="lab-go">Stampa</button>
   </div>
 </div>
 <div id="sheet-bg" class="sheet-bg" hidden>
@@ -2262,12 +2277,44 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       return { box: b, tot: tot, righe: righe };
     });
   }
+  /* ---------- frontespizi dei box (più per foglio) ---------- */
+  function labBoxes() {
+    var set = new Set(); listAll().forEach(function (a) { if (a.box) set.add(a.box); });
+    return Array.from(set).sort(function (x, y) { return String(x).localeCompare(String(y), 'it', { numeric: true }); });
+  }
+  function labCount() { return document.querySelectorAll('#lab-list input:checked').length; }
+  function labUpd() { var n = labCount(); $('#lab-go').disabled = !n; $('#lab-go').textContent = n ? 'Stampa ' + n + (n === 1 ? ' frontespizio' : ' frontespizi') : 'Scegli almeno un box'; }
+  function openLabs() {
+    var bx = labBoxes(), l = $('#lab-list');
+    if (!bx.length) { toast('Non ci sono albi nei box'); return; }
+    l.textContent = '';
+    bx.forEach(function (b) {
+      var cb = h('input', { type: 'checkbox', value: b });
+      cb.checked = true; cb.addEventListener('change', labUpd);
+      l.append(h('label', { style: 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line, #ccc);border-radius:10px' }, cb, h('span', { text: boxLabel(b) })));
+    });
+    labUpd(); $('#lab-bg').hidden = false; layerOpen('lab', closeLabs);
+  }
+  function closeLabs() { $('#lab-bg').hidden = true; layerShut('lab'); }
+  function printLabs() {
+    var sel = Array.from(document.querySelectorAll('#lab-list input:checked')).map(function (c) { return c.value; });
+    if (!sel.length) return;
+    var pa = $('#print-area');
+    if (!pa) { pa = h('div', { id: 'print-area' }); document.body.append(pa); }
+    pa.textContent = ''; pa.className = 'plabs';
+    sel.forEach(function (b) {
+      pa.append(h('div', { class: 'plab' }, h('h2', { text: boxLabel(b) }),
+        h('span', { class: 'plogo', 'aria-hidden': 'true' }, h('span', { class: 'pin', text: 'in' }), h('span', { class: 'pbx', text: 'BOX' }))));
+    });
+    closeLabs();
+    setTimeout(function () { window.print(); }, 50);
+  }
   function printBox(b) {
     var data = boxSummary(b);
     if (!data.length) { toast('Non ci sono albi nei box'); return; }
     var pa = $('#print-area');
     if (!pa) { pa = h('div', { id: 'print-area' }); document.body.append(pa); }
-    pa.textContent = '';
+    pa.textContent = ''; pa.className = '';
     data.forEach(function (d) {
       var body = h('div', { class: 'pbody' });
       d.righe.forEach(function (r) {
@@ -2689,6 +2736,11 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
   $('#covprog-stop').addEventListener('click', function () { fetchStop = true; $('#covprog-t').textContent = 'Mi fermo…'; });
   $('#btn-slim').addEventListener('click', slimCovers);
   $('#btn-thumbs').addEventListener('click', makeThumbs);
+  $('#btn-labs').addEventListener('click', openLabs);
+  $('#lab-close').addEventListener('click', closeLabs);
+  $('#lab-go').addEventListener('click', printLabs);
+  $('#lab-all').addEventListener('click', function () { document.querySelectorAll('#lab-list input').forEach(function (c) { c.checked = true; }); labUpd(); });
+  $('#lab-none').addEventListener('click', function () { document.querySelectorAll('#lab-list input').forEach(function (c) { c.checked = false; }); labUpd(); });
   $('#btn-antol').addEventListener('click', openAntol);
   /* menu delle opzioni e logo che riporta alla home */
   var menuPass = false, MENU_KEEP = { 'btn-warm': 1, 'btn-thumbs': 1, 'btn-slim': 1, 'btn-fetch': 1, 'menu-close': 1 };
