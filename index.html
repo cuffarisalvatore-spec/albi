@@ -466,7 +466,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
       <button type="button" class="btn" id="btn-install" hidden>Installa l'app</button>
       <button type="button" class="btn" id="btn-out">Esci</button>
     </div>
-    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione 1.4</p>
+    <p class="hint" style="text-align:center;margin:4px 0 0">inBOX · versione 1.5</p>
     <p class="hint" id="acct"></p>
     <div class="seg" id="theme-seg" role="group" aria-label="Tema dell’app"><button type="button" data-theme-mode="auto">Sistema</button><button type="button" data-theme-mode="light">Chiaro</button><button type="button" data-theme-mode="dark">Scuro</button></div>
     <input type="file" id="in-bk" accept=".json,application/json" hidden>
@@ -1046,7 +1046,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-vis
     var newp = $('#newp');
     if (typed + '|' + n !== webKey) { $('#web-res').textContent = ''; webList = []; }
     if (!typed) {
-      newp.hidden = true; showNew = false;
+      newp.hidden = false; showNew = false; // il riquadro «Albo nuovo» (editore, anno, copertina) è sempre pronto, anche prima di scrivere la collana
       box.append(h('p', { class: 'hint', text: store.size ? 'Scrivi la collana e il numero (o lascia il numero vuoto per un volume unico): l’albo compare qui.' : 'Non hai ancora albi. Importa il file di ComicsBox dalla scheda Collezione, oppure aggiungili uno a uno da qui.' }));
       return;
     }
